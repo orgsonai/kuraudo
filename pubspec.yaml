@@ -1,0 +1,55 @@
+name: kuraudo
+description: "Kuraudo（蔵人）- Google Drive同期型パスワードマネージャー"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # 暗号化
+  pointycastle: ^3.9.1        # AES-256-GCM
+  argon2: ^1.0.1               # Argon2id (純Dart実装、FFI不要)
+  
+  # ユーティリティ
+  uuid: ^4.2.1                 # エントリUUID生成
+  path_provider: ^2.1.1        # ローカルファイルパス
+  
+  # Google Drive 同期
+  google_sign_in: ^6.2.1       # Google認証
+  googleapis: ^13.2.0          # Google Drive API v3
+  http: ^1.2.0                 # HTTP クライアント
+  connectivity_plus: ^6.0.3    # ネットワーク状態検知
+  
+  # UI
+  cupertino_icons: ^1.0.6
+  url_launcher: ^6.2.2          # URLをブラウザで開く
+  
+  # セキュリティ
+  local_auth: ^2.3.0             # 生体認証（指紋/顔認証）
+  flutter_secure_storage: ^9.2.4 # PIN安全保存
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  msix: ^3.16.8                  # Windows MSIX インストーラー生成
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+# Windows MSIX パッケージング設定
+msix_config:
+  display_name: Kuraudo
+  publisher_display_name: Zero to Ship
+  identity_name: com.zerotoship.kuraudo
+  msix_version: 0.1.0.0
+  logo_path: assets/icon.png
+  capabilities: internetClient
+  languages: ja-jp, en-us
