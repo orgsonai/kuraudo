@@ -1,5 +1,8 @@
 package com.zerotoship.kuraudo
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -23,6 +26,10 @@ class MainActivity : FlutterFragmentActivity() {
                     "openAutofillSettings" -> {
                         openAutofillSettings()
                         result.success(null)
+                    }
+                    "clearClipboard" -> {
+                        clearClipboard()
+                        result.success(true)
                     }
                     "updateEntries" -> {
                         val entries = call.argument<List<Map<String, Any?>>>("entries")
@@ -55,6 +62,17 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (e: Exception) {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             }
+        }
+    }
+
+    private fun clearClipboard() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // Android 9+: clearPrimaryClip() で履歴ごと削除
+            clipboard.clearPrimaryClip()
+        } else {
+            // フォールバック: 空のClipDataをセット
+            clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
         }
     }
 

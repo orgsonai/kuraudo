@@ -40,18 +40,23 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   }
 
   void _copyToClipboard(String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$labelをコピーしました'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    // パスワードの場合30秒後にクリア
     if (label.contains('パスワード')) {
-      Future.delayed(const Duration(seconds: 30), () {
-        Clipboard.setData(const ClipboardData(text: ''));
-      });
+      // パスワードは完全クリア付きでコピー
+      copyAndScheduleClear(text);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$labelをコピー（30秒後クリア）'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      Clipboard.setData(ClipboardData(text: text));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$labelをコピーしました'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 

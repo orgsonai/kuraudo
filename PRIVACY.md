@@ -70,11 +70,7 @@ Kuraudo には広告、アナリティクス、トラッキングの仕組みは
 
 ## オープンソース
 
-<<<<<<< HEAD
-Kuraudo のソースコードは [GitHub](https://github.com/zerotoship/kuraudo) で公開されています。プライバシーに関する実装を誰でも監査できます。
-=======
 Kuraudo のソースコードは [GitHub](https://github.com/orgsonai/kuraudo) で公開されています。プライバシーに関する実装を誰でも監査できます。
->>>>>>> a28cd27 (fix: URLをorgsonai/zero-to-ship-appに修正)
 
 ## 変更について
 

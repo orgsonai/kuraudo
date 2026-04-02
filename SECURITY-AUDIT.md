@@ -85,8 +85,8 @@ Kuraudo は個人が開発・維持するオープンソースの無料アプリ
 
 ### 10. クリップボードクリアのタイミング ✅
 
-**ファイル**: `main.dart` `didChangeAppLifecycleState()`  
-**対応**: バックグラウンド移行時（paused/hidden）にVaultアンロック中であればクリップボードを即クリア。アプリ終了時（detached）も即クリア。30秒タイマーと併用
+**ファイル**: `main.dart`, `autofill_service.dart`, `MainActivity.kt`  
+**対応**: Android 9+で`clearPrimaryClip()`による履歴ごと完全削除。バックグラウンド移行時・アプリ終了時に即座クリア。設定画面にON/OFFトグル追加。30秒タイマーも完全クリアに変更
 
 ### 11. ファイルヘッダーのHMAC不足
 

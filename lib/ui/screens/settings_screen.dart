@@ -28,6 +28,9 @@ class SettingsScreen extends StatefulWidget {
   final bool realtimeSyncEnabled;
   final void Function(bool) onAutoSyncChanged;
   final void Function(bool) onRealtimeSyncChanged;
+  // クリップボード自動クリア
+  final bool clipboardAutoClear;
+  final void Function(bool) onClipboardAutoClearChanged;
   // PIN/生体認証
   final bool pinEnabled;
   final bool biometricEnabled;
@@ -50,6 +53,8 @@ class SettingsScreen extends StatefulWidget {
     this.realtimeSyncEnabled = true,
     required this.onAutoSyncChanged,
     required this.onRealtimeSyncChanged,
+    this.clipboardAutoClear = true,
+    required this.onClipboardAutoClearChanged,
     this.pinEnabled = false,
     this.biometricEnabled = false,
     this.pinThresholdMinutes = 5,
@@ -71,6 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late String _themeMode;
   late bool _autoSyncEnabled;
   late bool _realtimeSyncEnabled;
+  late bool _clipboardAutoClear;
   late bool _pinEnabled;
   late bool _biometricEnabled;
   late int _pinThresholdMinutes;
@@ -84,6 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _themeMode = widget.themeMode;
     _autoSyncEnabled = widget.autoSyncEnabled;
     _realtimeSyncEnabled = widget.realtimeSyncEnabled;
+    _clipboardAutoClear = widget.clipboardAutoClear;
     _pinEnabled = widget.pinEnabled;
     _biometricEnabled = widget.biometricEnabled;
     _pinThresholdMinutes = widget.pinThresholdMinutes;
@@ -267,12 +274,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (method == null) return;
     final data = generator(entries);
     if (method == 'clipboard') {
-      Clipboard.setData(ClipboardData(text: data));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${entries.length}件を${formatName}形式でコピーしました\n30秒後にクリップボードをクリアします')));
-      // 30秒後にクリップボードクリア
-      Future.delayed(const Duration(seconds: 30), () {
-        Clipboard.setData(const ClipboardData(text: ''));
-      });
+      copyAndScheduleClear(data, autoClearEnabled: _clipboardAutoClear);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${entries.length}件を${formatName}形式でコピーしました${_clipboardAutoClear ? "\n30秒後にクリップボードをクリアします" : ""}')));
     } else {
       final dir = await _getExportDir();
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
@@ -560,6 +563,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ],
+              ]),
+            ),
+          ),
+
+          // ── クリップボード ──
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.content_paste_off_rounded, size: 20),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('クリップボード自動クリア', style: TextStyle(fontSize: 14))),
+                  Switch(
+                    value: _clipboardAutoClear,
+                    activeColor: KuraudoTheme.accent,
+                    onChanged: (v) {
+                      setState(() => _clipboardAutoClear = v);
+                      widget.onClipboardAutoClearChanged(v);
+                    },
+                  ),
+                ]),
+                Text(
+                  'パスワードコピー後30秒で自動クリア。\n'
+                  'バックグラウンド移行時・アプリ終了時にも即座にクリア。\n'
+                  'Android 9+ではクリップボード履歴も削除されます。',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
+                ),
               ]),
             ),
           ),

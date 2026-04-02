@@ -9,6 +9,38 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import '../models/vault_entry.dart';
 
+/// クリップボード完全クリア（履歴も含む）
+/// 
+/// Android 13+: ClipboardManager.clearPrimaryClip() で履歴ごと削除
+/// それ以外: 空文字セット（フォールバック）
+Future<void> clearClipboardFully() async {
+  if (Platform.isAndroid) {
+    try {
+      const channel = MethodChannel('com.zerotoship.kuraudo/autofill');
+      await channel.invokeMethod('clearClipboard');
+      return;
+    } catch (_) {
+      // フォールバック
+    }
+  }
+  // Android 12以下、Linux、Windowsのフォールバック
+  await Clipboard.setData(const ClipboardData(text: ''));
+}
+
+/// クリップボードにコピーし、指定秒後に完全クリア
+Future<void> copyAndScheduleClear(
+  String text, {
+  int clearAfterSeconds = 30,
+  bool autoClearEnabled = true,
+}) async {
+  await Clipboard.setData(ClipboardData(text: text));
+  if (autoClearEnabled && clearAfterSeconds > 0) {
+    Future.delayed(Duration(seconds: clearAfterSeconds), () {
+      clearClipboardFully();
+    });
+  }
+}
+
 /// Autofill の対象フィールド
 enum AutofillField {
   username,

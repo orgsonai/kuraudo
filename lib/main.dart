@@ -72,6 +72,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   String _themeModeStr = 'dark';
   bool _autoSyncEnabled = true;
   bool _realtimeSyncEnabled = true;
+  bool _clipboardAutoClear = true; // クリップボード自動クリア
 
   // PIN/生体認証
   bool _pinEnabled = false;
@@ -107,13 +108,13 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       // バックグラウンドに移行した時刻を記録
       _lastActiveTime ??= DateTime.now();
       // セキュリティ: バックグラウンド移行時にクリップボードをクリア
-      _clearClipboardIfSensitive();
+      if (_clipboardAutoClear) _clearClipboardIfSensitive();
     } else if (state == AppLifecycleState.inactive) {
       // inactive（通知バーを引き下げた等）でも記録
       _lastActiveTime ??= DateTime.now();
     } else if (state == AppLifecycleState.detached) {
       // アプリ終了時にクリップボードをクリア
-      Clipboard.setData(const ClipboardData(text: ''));
+      if (_clipboardAutoClear) clearClipboardFully();
     } else if (state == AppLifecycleState.resumed) {
       _checkAutoLock();
       // フォアグラウンドに戻ったら操作時刻をリセット
@@ -123,9 +124,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
 
   /// クリップボードにパスワード等のセンシティブデータがある場合クリア
   void _clearClipboardIfSensitive() {
-    // Vaultがアンロック中の場合のみクリア（ロック中はコピー操作が発生しないため）
     if (_vaultService.state == VaultState.unlocked) {
-      Clipboard.setData(const ClipboardData(text: ''));
+      clearClipboardFully();
     }
   }
 
@@ -199,6 +199,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         _themeModeStr = json['themeMode'] as String? ?? 'dark';
         _autoSyncEnabled = json['autoSyncEnabled'] as bool? ?? true;
         _realtimeSyncEnabled = json['realtimeSyncEnabled'] as bool? ?? true;
+        _clipboardAutoClear = json['clipboardAutoClear'] as bool? ?? true;
         _pinEnabled = json['pinEnabled'] as bool? ?? false;
         _biometricEnabled = json['biometricEnabled'] as bool? ?? false;
         _pinThresholdMinutes = json['pinThresholdMinutes'] as int? ?? 5;
@@ -224,6 +225,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         'themeMode': _themeModeStr,
         'autoSyncEnabled': _autoSyncEnabled,
         'realtimeSyncEnabled': _realtimeSyncEnabled,
+        'clipboardAutoClear': _clipboardAutoClear,
         'pinEnabled': _pinEnabled,
         'biometricEnabled': _biometricEnabled,
         'pinThresholdMinutes': _pinThresholdMinutes,
@@ -292,6 +294,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         realtimeSyncEnabled: _realtimeSyncEnabled,
         onAutoSyncChanged: (v) { _autoSyncEnabled = v; _saveSettings(); },
         onRealtimeSyncChanged: (v) { _realtimeSyncEnabled = v; _saveSettings(); },
+        clipboardAutoClear: _clipboardAutoClear,
+        onClipboardAutoClearChanged: (v) { _clipboardAutoClear = v; _saveSettings(); },
         pinEnabled: _pinEnabled,
         biometricEnabled: _biometricEnabled,
         pinThresholdMinutes: _pinThresholdMinutes,

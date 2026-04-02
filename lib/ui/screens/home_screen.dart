@@ -12,6 +12,7 @@ import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
 import '../../services/google_drive_service.dart';
 import '../../services/sync_manager.dart';
+import '../../services/autofill_service.dart';
 import '../../core/password_generator.dart';
 import '../theme/kuraudo_theme.dart';
 import 'entry_detail_screen.dart';
@@ -37,6 +38,9 @@ class HomeScreen extends StatefulWidget {
   final bool realtimeSyncEnabled;
   final void Function(bool) onAutoSyncChanged;
   final void Function(bool) onRealtimeSyncChanged;
+  // クリップボード自動クリア
+  final bool clipboardAutoClear;
+  final void Function(bool) onClipboardAutoClearChanged;
   // PIN/生体認証
   final bool pinEnabled;
   final bool biometricEnabled;
@@ -45,7 +49,7 @@ class HomeScreen extends StatefulWidget {
   final void Function(bool) onBiometricEnabledChanged;
   final void Function(int) onPinThresholdChanged;
   final dynamic secureStorage; // FlutterSecureStorage
-  const HomeScreen({super.key, required this.vaultService, required this.driveService, required this.syncManager, required this.onLock, this.onInteraction, this.autoLockMinutes = 5, this.passwordExpiryDays = 90, required this.onAutoLockChanged, required this.onPasswordExpiryChanged, this.themeMode = 'dark', required this.onThemeModeChanged, this.autoSyncEnabled = true, this.realtimeSyncEnabled = true, required this.onAutoSyncChanged, required this.onRealtimeSyncChanged, this.pinEnabled = false, this.biometricEnabled = false, this.pinThresholdMinutes = 5, required this.onPinEnabledChanged, required this.onBiometricEnabledChanged, required this.onPinThresholdChanged, this.secureStorage});
+  const HomeScreen({super.key, required this.vaultService, required this.driveService, required this.syncManager, required this.onLock, this.onInteraction, this.autoLockMinutes = 5, this.passwordExpiryDays = 90, required this.onAutoLockChanged, required this.onPasswordExpiryChanged, this.themeMode = 'dark', required this.onThemeModeChanged, this.autoSyncEnabled = true, this.realtimeSyncEnabled = true, required this.onAutoSyncChanged, required this.onRealtimeSyncChanged, this.clipboardAutoClear = true, required this.onClipboardAutoClearChanged, this.pinEnabled = false, this.biometricEnabled = false, this.pinThresholdMinutes = 5, required this.onPinEnabledChanged, required this.onBiometricEnabledChanged, required this.onPinThresholdChanged, this.secureStorage});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -147,8 +151,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _addEntry() async { final r = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => EntryEditScreen(vaultService: widget.vaultService, initialCategory: _selectedCategory))); if (r == true) _refresh(); }
   Future<void> _openEntry(VaultEntry e) async { final r = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => EntryDetailScreen(vaultService: widget.vaultService, entry: e))); if (r == true) _refresh(); }
   Future<void> _duplicateEntry(VaultEntry e) async { widget.vaultService.vault?.addEntry(VaultEntry(uuid: Uuid().v4(), title: '${e.title} (コピー)', username: e.username, password: e.password, email: e.email, url: e.url, notes: e.notes, category: e.category, tags: List.from(e.tags), totp: e.totp, favorite: false)); await widget.vaultService.save(); _showStatus('複製しました'); _refresh(); }
-  void _copyPassword(VaultEntry e) { Clipboard.setData(ClipboardData(text: e.password)); _showStatus('パスワードをコピー（30秒後クリア）'); Future.delayed(const Duration(seconds: 30), () { Clipboard.setData(const ClipboardData(text: '')); }); }
-  void _copyUsername(VaultEntry e) { Clipboard.setData(ClipboardData(text: e.username)); _showStatus('ユーザー名をコピー'); }
+  void _copyPassword(VaultEntry e) {
+    copyAndScheduleClear(e.password, autoClearEnabled: widget.clipboardAutoClear);
+    _showStatus('パスワードをコピー${widget.clipboardAutoClear ? "（30秒後クリア）" : ""}');
+  }
+  void _copyUsername(VaultEntry e) {
+    Clipboard.setData(ClipboardData(text: e.username));
+    _showStatus('ユーザー名をコピー');
+  }
   Future<void> _openUrl(String url) async { var u = url; if (!u.startsWith('http')) u = 'https://$u'; try { await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication); } catch (_) { _showStatus('URLを開けませんでした'); } }
 
   Future<void> _renameCategory(String old) async {
@@ -314,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(value: 'expired', child: Row(children: [Icon(Icons.schedule_rounded, size: 18), SizedBox(width: 10), Text('期限切れパスワード')])),
       const PopupMenuDivider(),
       const PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings_rounded, size: 18), SizedBox(width: 10), Text('設定')])),
-    ]).then((v) { if (v == null) return; switch(v) { case 'sync': Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(vaultService: widget.vaultService, driveService: widget.driveService, syncManager: widget.syncManager))).then((_) => _refresh()); case 'accounts': Navigator.push(context, MaterialPageRoute(builder: (_) => AccountLinkScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'import': Navigator.push(context, MaterialPageRoute(builder: (_) => ImportScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'settings': Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(vaultService: widget.vaultService, autoLockMinutes: widget.autoLockMinutes, passwordExpiryDays: widget.passwordExpiryDays, onAutoLockChanged: widget.onAutoLockChanged, onPasswordExpiryChanged: widget.onPasswordExpiryChanged, themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged, autoSyncEnabled: widget.autoSyncEnabled, realtimeSyncEnabled: widget.realtimeSyncEnabled, onAutoSyncChanged: widget.onAutoSyncChanged, onRealtimeSyncChanged: widget.onRealtimeSyncChanged, pinEnabled: widget.pinEnabled, biometricEnabled: widget.biometricEnabled, pinThresholdMinutes: widget.pinThresholdMinutes, onPinEnabledChanged: widget.onPinEnabledChanged, onBiometricEnabledChanged: widget.onBiometricEnabledChanged, onPinThresholdChanged: widget.onPinThresholdChanged, secureStorage: widget.secureStorage))); case 'weak': _showWeakPasswords(); case 'duplicate': _showDuplicatePasswords(); case 'expired': _showExpiredPasswords(); } });
+    ]).then((v) { if (v == null) return; switch(v) { case 'sync': Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(vaultService: widget.vaultService, driveService: widget.driveService, syncManager: widget.syncManager))).then((_) => _refresh()); case 'accounts': Navigator.push(context, MaterialPageRoute(builder: (_) => AccountLinkScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'import': Navigator.push(context, MaterialPageRoute(builder: (_) => ImportScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'settings': Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(vaultService: widget.vaultService, autoLockMinutes: widget.autoLockMinutes, passwordExpiryDays: widget.passwordExpiryDays, onAutoLockChanged: widget.onAutoLockChanged, onPasswordExpiryChanged: widget.onPasswordExpiryChanged, themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged, autoSyncEnabled: widget.autoSyncEnabled, realtimeSyncEnabled: widget.realtimeSyncEnabled, onAutoSyncChanged: widget.onAutoSyncChanged, onRealtimeSyncChanged: widget.onRealtimeSyncChanged, clipboardAutoClear: widget.clipboardAutoClear, onClipboardAutoClearChanged: widget.onClipboardAutoClearChanged, pinEnabled: widget.pinEnabled, biometricEnabled: widget.biometricEnabled, pinThresholdMinutes: widget.pinThresholdMinutes, onPinEnabledChanged: widget.onPinEnabledChanged, onBiometricEnabledChanged: widget.onBiometricEnabledChanged, onPinThresholdChanged: widget.onPinThresholdChanged, secureStorage: widget.secureStorage))); case 'weak': _showWeakPasswords(); case 'duplicate': _showDuplicatePasswords(); case 'expired': _showExpiredPasswords(); } });
   }
 
   @override

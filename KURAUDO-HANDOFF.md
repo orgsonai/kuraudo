@@ -37,6 +37,7 @@
 - 検索ボックスにクリア（×）ボタン追加（PC版・モバイル版両方）
 - クリップボードセキュリティ強化: バックグラウンド移行時＋アプリ終了時にクリップボード即クリア
 - バックアップ世代管理を手動/自動分離: 各3世代保持（合計最大6つ）、ファイル名にlabel（manual/auto）を含む
+- クリップボード完全クリア: Android 9+ clearPrimaryClip()で履歴ごと削除、設定画面にON/OFFトグル、バックグラウンド移行時・アプリ終了時にも即座クリア
 - Argon2idパラメータ強化: デスクトップ64MB/4並列、モバイル32MB/2並列（OWASP推奨水準）
 - パスワード強度評価強化: 辞書攻撃耐性（よく使われるPW、キーボードパターン、辞書単語、リート表記検出）
 - PIN認証試行回数制限: 5回失敗でマスターパスワード強制
@@ -129,6 +130,7 @@ docs/              kuraudo-spec-v1.docx / store-metadata.md / android-setup.md /
 - Autofillキャッシュ: Vault解錠時＋エントリ保存時にnative側へ自動送信
 - デスクトップAutoType: Linux=xdotool、Windows=PowerShell SendKeys。未インストール時はクリップボードフォールバック
 - 検索ボックス: TextEditingController (_searchCtrl) でクリアボタン制御
+- クリップボード: copyAndScheduleClear()とclearClipboardFully()を共通関数として使用（autofill_service.dart）。設定のclipboardAutoClearで制御。Android側はMainActivity.ktのclearClipboardメソッド
 
 ---
-*最終更新: 2026年4月2日*
+*最終更新: 2026年4月3日*
