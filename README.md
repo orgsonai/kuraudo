@@ -34,11 +34,7 @@
 
 ```bash
 # リポジトリをクローン
-<<<<<<< HEAD
-git clone https://github.com/zerotoship/kuraudo.git
-=======
 git clone https://github.com/orgsonai/kuraudo.git
->>>>>>> a28cd27 (fix: URLをorgsonai/zero-to-ship-appに修正)
 cd kuraudo
 
 # 依存関係をインストール
