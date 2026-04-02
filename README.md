@@ -163,5 +163,5 @@ Issue報告は歓迎します。PRについては [CONTRIBUTING.md](CONTRIBUTING
 
 ## リンク
 
-- [Zero to Ship](https://zero-to-ship.vercel.app) — プロジェクトホーム
+- [Zero to Ship](https://zero-to-ship-app.vercel.app) — プロジェクトホーム
 - [方針設計書](docs/kuraudo-spec-v1.docx) — 詳細な技術仕様
