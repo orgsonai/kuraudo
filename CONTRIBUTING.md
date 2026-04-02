@@ -2,7 +2,11 @@
 
 ## コントリビューション方針
 
+<<<<<<< HEAD
 Kuraudo は個人プロジェクト（[Zero to Ship](https://zero-to-ship.vercel.app)）から生まれたアプリです。コミュニティからの協力を歓迎しますが、開発方針の最終判断は開発者が行います。
+=======
+Kuraudo は個人プロジェクト（[Zero to Ship](https://zero-to-ship-app.vercel.app)）から生まれたアプリです。コミュニティからの協力を歓迎しますが、開発方針の最終判断は開発者が行います。
+>>>>>>> a28cd27 (fix: URLをorgsonai/zero-to-ship-appに修正)
 
 ## Issue
 
@@ -51,7 +55,11 @@ Kuraudo は個人プロジェクト（[Zero to Ship](https://zero-to-ship.vercel
 
 ```bash
 # セットアップ
+<<<<<<< HEAD
 git clone https://github.com/zerotoship/kuraudo.git
+=======
+git clone https://github.com/orgsonai/kuraudo.git
+>>>>>>> a28cd27 (fix: URLをorgsonai/zero-to-ship-appに修正)
 cd kuraudo
 flutter pub get
 flutter run
