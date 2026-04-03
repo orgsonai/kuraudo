@@ -72,6 +72,9 @@ Open Source: https://github.com/orgsonai/kuraudo
 ### プライバシーポリシーURL
 `https://github.com/orgsonai/kuraudo/blob/main/PRIVACY.md`
 
+### 利用規約URL
+`https://github.com/orgsonai/kuraudo/blob/main/TERMS.md`
+
 ---
 
 ## Google Play

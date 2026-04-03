@@ -153,6 +153,10 @@ kuraudo/
 
 > 個人プロジェクトのため、上記以降の機能追加・アップデートは予定していません。バグ修正は随時対応します。
 
+## AI活用について
+
+Kuraudo は [Zero to Ship](https://zero-to-ship-app.vercel.app) プロジェクトの一環として、AIアシスタント（Claude）によって開発されています。設計・コード生成・ドキュメント作成を含むほぼ全ての工程をAIが担当し、人間は方針の指示・変更要望・動作確認を行っています。
+
 ## コントリビューション
 
 Issue報告は歓迎します。PRについては [CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
@@ -164,4 +168,6 @@ Issue報告は歓迎します。PRについては [CONTRIBUTING.md](CONTRIBUTING
 ## リンク
 
 - [Zero to Ship](https://zero-to-ship-app.vercel.app) — プロジェクトホーム
+- [プライバシーポリシー](PRIVACY.md)
+- [利用規約](TERMS.md)
 - [方針設計書](docs/kuraudo-spec-v1.docx) — 詳細な技術仕様
