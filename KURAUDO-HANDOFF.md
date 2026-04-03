@@ -8,6 +8,7 @@
 - **ライセンス**: GPL-3.0
 - **所属**: Zero to Ship プロジェクト
 - **開発環境**: Arch Linux KDE Wayland
+- **開発手法**: AI駆動開発（Claude） — 設計・コード生成・ドキュメント作成をAIが担当、人間は方針指示・変更要望・動作確認
 
 ## 完了済み
 - フェーズ1〜5: 暗号化エンジン、UI8画面、Google Drive同期、インポート/エクスポート拡張、TOTP+Autofill基盤
@@ -130,7 +131,7 @@ docs/              kuraudo-spec-v1.docx / store-metadata.md / android-setup.md /
 - Autofillキャッシュ: Vault解錠時＋エントリ保存時にnative側へ自動送信
 - デスクトップAutoType: Linux=xdotool、Windows=PowerShell SendKeys。未インストール時はクリップボードフォールバック
 - 検索ボックス: TextEditingController (_searchCtrl) でクリアボタン制御
-- クリップボード: copyAndScheduleClear()とclearClipboardFully()を共通関数として使用（autofill_service.dart）。設定のclipboardAutoClearで制御。Android側はMainActivity.ktのclearClipboardメソッド
+- クリップボード: copyToClipboardSensitive()（Android 13+ IS_SENSITIVE対応）、copyAndScheduleClear()、clearClipboardFully()（Linux: Wayland wl-copy --clear / X11 xclip -i /dev/null を自動検出、Windows: PowerShell、Android: clearPrimaryClip）を共通関数として使用。設定のclipboardAutoClearで制御
 
 ---
 *最終更新: 2026年4月3日*

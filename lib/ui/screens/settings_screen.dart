@@ -589,7 +589,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   'パスワードコピー後30秒で自動クリア。\n'
                   'バックグラウンド移行時・アプリ終了時にも即座にクリア。\n'
-                  'Android 9+ではクリップボード履歴も削除されます。',
+                  'Linux: Wayland(wl-copy) / X11(xclip) を自動検出。\n'
+                  'Android 13+ではキーボード履歴への保存を防止。\n'
+                  '※ Gboard等の既存履歴はOS制限で手動削除が必要です。',
                   style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
                 ),
               ]),

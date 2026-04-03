@@ -9,22 +9,84 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import '../models/vault_entry.dart';
 
-/// クリップボード完全クリア（履歴も含む）
+/// クリップボード完全クリア
 /// 
-/// Android 13+: ClipboardManager.clearPrimaryClip() で履歴ごと削除
-/// それ以外: 空文字セット（フォールバック）
+/// Linux: Wayland(wl-copy --clear) / X11(xclip, xsel) を自動検出して使用
+/// Android 9+: ClipboardManager.clearPrimaryClip()
+///   ※ Gboard等のキーボードアプリ独自の履歴はOS制限で消去不可
+///   ※ Android 13+: EXTRA_IS_SENSITIVE で履歴保存自体を防止（copyToClipboardSensitiveで対応）
+/// Windows: PowerShell でクリア
 Future<void> clearClipboardFully() async {
   if (Platform.isAndroid) {
     try {
       const channel = MethodChannel('com.zerotoship.kuraudo/autofill');
       await channel.invokeMethod('clearClipboard');
       return;
-    } catch (_) {
-      // フォールバック
-    }
+    } catch (_) {}
+  } else if (Platform.isLinux) {
+    await _clearClipboardLinux();
+    return;
+  } else if (Platform.isWindows) {
+    try {
+      await Process.run('powershell', ['-command',
+        'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::Clear()']);
+      return;
+    } catch (_) {}
   }
-  // Android 12以下、Linux、Windowsのフォールバック
+  // フォールバック
   await Clipboard.setData(const ClipboardData(text: ''));
+}
+
+/// Linux: Wayland / X11 / XWayland を自動検出してクリップボードをクリア
+Future<void> _clearClipboardLinux() async {
+  final isWayland = Platform.environment['XDG_SESSION_TYPE'] == 'wayland' ||
+      Platform.environment['WAYLAND_DISPLAY']?.isNotEmpty == true;
+
+  if (isWayland) {
+    // Wayland: wl-copy --clear（wl-clipboardパッケージ）
+    try {
+      final result = await Process.run('wl-copy', ['--clear']);
+      if (result.exitCode == 0) return;
+    } catch (_) {}
+    // wl-copy がない場合: wl-copy に空文字列を渡す方法も試行
+    try {
+      final result = await Process.run('bash', ['-c', 'echo -n | wl-copy']);
+      if (result.exitCode == 0) return;
+    } catch (_) {}
+  }
+
+  // X11 または Waylandフォールバック（XWayland経由でxclipが使えるケースもある）
+  // xclip
+  try {
+    await Process.run('xclip', ['-selection', 'clipboard', '-i', '/dev/null']);
+    await Process.run('xclip', ['-selection', 'primary', '-i', '/dev/null']);
+    return;
+  } catch (_) {}
+
+  // xsel
+  try {
+    await Process.run('xsel', ['--clipboard', '--delete']);
+    await Process.run('xsel', ['--delete']);
+    return;
+  } catch (_) {}
+
+  // 全て失敗した場合のフォールバック
+  await Clipboard.setData(const ClipboardData(text: ''));
+}
+
+/// クリップボードにコピー（Android 13+ではセンシティブフラグ付き）
+/// 
+/// Android 13+: ClipDescription.EXTRA_IS_SENSITIVE で
+/// キーボードアプリの履歴保存を防止
+Future<void> copyToClipboardSensitive(String text) async {
+  if (Platform.isAndroid) {
+    try {
+      const channel = MethodChannel('com.zerotoship.kuraudo/autofill');
+      await channel.invokeMethod('copyWithSensitiveFlag', {'text': text});
+      return;
+    } catch (_) {}
+  }
+  await Clipboard.setData(ClipboardData(text: text));
 }
 
 /// クリップボードにコピーし、指定秒後に完全クリア
@@ -33,7 +95,8 @@ Future<void> copyAndScheduleClear(
   int clearAfterSeconds = 30,
   bool autoClearEnabled = true,
 }) async {
-  await Clipboard.setData(ClipboardData(text: text));
+  // センシティブフラグ付きでコピー（Android 13+でキーボード履歴防止）
+  await copyToClipboardSensitive(text);
   if (autoClearEnabled && clearAfterSeconds > 0) {
     Future.delayed(Duration(seconds: clearAfterSeconds), () {
       clearClipboardFully();
