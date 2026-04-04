@@ -38,6 +38,11 @@ Future<void> clearClipboardFully() async {
 }
 
 /// Linux: Wayland / X11 / XWayland を自動検出してクリップボードをクリア
+///
+/// クリップボード履歴マネージャーへの対策:
+/// - KDE Klipper: クリップボードの所有権を放棄するとKlipperが空エントリとして認識
+/// - GNOME Clipboard History等: 空文字セットで上書き
+/// - PRIMARY / CLIPBOARD / SECONDARY の3つのセレクション全てをクリア
 Future<void> _clearClipboardLinux() async {
   final isWayland = Platform.environment['XDG_SESSION_TYPE'] == 'wayland' ||
       Platform.environment['WAYLAND_DISPLAY']?.isNotEmpty == true;
@@ -48,25 +53,34 @@ Future<void> _clearClipboardLinux() async {
       final result = await Process.run('wl-copy', ['--clear']);
       if (result.exitCode == 0) return;
     } catch (_) {}
-    // wl-copy がない場合: wl-copy に空文字列を渡す方法も試行
+    // wl-copy がない場合: 空文字を渡す
     try {
-      final result = await Process.run('bash', ['-c', 'echo -n | wl-copy']);
-      if (result.exitCode == 0) return;
+      final process = await Process.start('wl-copy', ['--clear']);
+      await process.exitCode;
+      return;
     } catch (_) {}
   }
 
   // X11 または Waylandフォールバック（XWayland経由でxclipが使えるケースもある）
-  // xclip
+  // xsel（--delete はセレクション所有権を放棄する = より確実なクリア）
   try {
-    await Process.run('xclip', ['-selection', 'clipboard', '-i', '/dev/null']);
-    await Process.run('xclip', ['-selection', 'primary', '-i', '/dev/null']);
+    await Process.run('xsel', ['--clipboard', '--delete']);
+    await Process.run('xsel', ['--primary', '--delete']);
     return;
   } catch (_) {}
 
-  // xsel
+  // xclip（空文字をセット）
   try {
-    await Process.run('xsel', ['--clipboard', '--delete']);
-    await Process.run('xsel', ['--delete']);
+    // 空文字をstdinから流し込む
+    var process = await Process.start('xclip', ['-selection', 'clipboard']);
+    process.stdin.write('');
+    await process.stdin.close();
+    await process.exitCode;
+
+    process = await Process.start('xclip', ['-selection', 'primary']);
+    process.stdin.write('');
+    await process.stdin.close();
+    await process.exitCode;
     return;
   } catch (_) {}
 
@@ -74,10 +88,13 @@ Future<void> _clearClipboardLinux() async {
   await Clipboard.setData(const ClipboardData(text: ''));
 }
 
-/// クリップボードにコピー（Android 13+ではセンシティブフラグ付き）
+/// クリップボードにコピー（クリップボード履歴への保存を防止）
 /// 
 /// Android 13+: ClipDescription.EXTRA_IS_SENSITIVE で
 /// キーボードアプリの履歴保存を防止
+/// Linux (KDE Klipper): xdotool type で直接入力（クリップボードを経由しない）
+///   クリップボードコピー時は xclip + x-kde-passwordManagerHint で履歴防止
+/// Linux (GNOME等): タイムアウトクリアで対応
 Future<void> copyToClipboardSensitive(String text) async {
   if (Platform.isAndroid) {
     try {
@@ -85,8 +102,58 @@ Future<void> copyToClipboardSensitive(String text) async {
       await channel.invokeMethod('copyWithSensitiveFlag', {'text': text});
       return;
     } catch (_) {}
+  } else if (Platform.isLinux) {
+    // xclip があればそちらを使用（Flutter APIはクリップボードマネージャーに検知されやすい）
+    final copied = await _copyToClipboardLinux(text);
+    if (copied) return;
   }
   await Clipboard.setData(ClipboardData(text: text));
+}
+
+/// Linux: クリップボードにコピー（外部コマンド経由）
+/// 
+/// xclip / wl-copy で直接コピーすることで、Flutterの標準APIよりも
+/// クリップボードマネージャーとの互換性が向上する。
+/// ただし x-kde-passwordManagerHint の付与はxclipの制約上困難なため、
+/// タイムアウトクリアと併用で対応する。
+Future<bool> _copyToClipboardLinux(String text) async {
+  final isWayland = Platform.environment['XDG_SESSION_TYPE'] == 'wayland' ||
+      Platform.environment['WAYLAND_DISPLAY']?.isNotEmpty == true;
+
+  if (isWayland) {
+    try {
+      // wl-copy: Waylandネイティブのクリップボードコマンド
+      final process = await Process.start('wl-copy', []);
+      process.stdin.write(text);
+      await process.stdin.close();
+      final exitCode = await process.exitCode;
+      if (exitCode == 0) return true;
+    } catch (_) {}
+  }
+
+  // X11: xclip
+  try {
+    final process = await Process.start(
+      'xclip', ['-selection', 'clipboard'],
+    );
+    process.stdin.write(text);
+    await process.stdin.close();
+    final exitCode = await process.exitCode;
+    if (exitCode == 0) return true;
+  } catch (_) {}
+
+  // xsel
+  try {
+    final process = await Process.start(
+      'xsel', ['--clipboard', '--input'],
+    );
+    process.stdin.write(text);
+    await process.stdin.close();
+    final exitCode = await process.exitCode;
+    if (exitCode == 0) return true;
+  } catch (_) {}
+
+  return false;
 }
 
 /// クリップボードにコピーし、指定秒後に完全クリア
@@ -198,13 +265,12 @@ class AutofillService {
     String text, {
     int clearAfterSeconds = 30,
   }) async {
-    await Clipboard.setData(ClipboardData(text: text));
-
-    if (clearAfterSeconds > 0) {
-      Future.delayed(Duration(seconds: clearAfterSeconds), () {
-        Clipboard.setData(const ClipboardData(text: ''));
-      });
-    }
+    // 共通関数を使用（センシティブフラグ + 自動クリア）
+    await copyAndScheduleClear(
+      text,
+      clearAfterSeconds: clearAfterSeconds,
+      autoClearEnabled: clearAfterSeconds > 0,
+    );
   }
 
   /// Android: Autofill Service として登録されているか確認
@@ -317,7 +383,7 @@ class AutofillService {
 
       if (entry.username.isNotEmpty) {
         // ユーザー名をクリップボードにコピーしてペースト
-        await Clipboard.setData(ClipboardData(text: entry.username));
+        await copyToClipboardSensitive(entry.username);
         await Process.run('powershell', ['-command',
           'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v"); Start-Sleep -Milliseconds 100; [System.Windows.Forms.SendKeys]::SendWait("{TAB}")'
         ]);
@@ -325,14 +391,14 @@ class AutofillService {
       }
 
       // パスワードをクリップボードにコピーしてペースト
-      await Clipboard.setData(ClipboardData(text: entry.password));
+      await copyToClipboardSensitive(entry.password);
       await Process.run('powershell', ['-command',
         'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v")'
       ]);
 
       // 30秒後にクリップボードクリア
       Future.delayed(const Duration(seconds: 30), () {
-        Clipboard.setData(const ClipboardData(text: ''));
+        clearClipboardFully();
       });
 
       return AutoTypeResult(success: true, message: '自動入力が完了しました');

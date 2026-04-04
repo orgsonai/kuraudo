@@ -31,6 +31,11 @@ class MainActivity : FlutterFragmentActivity() {
                         clearClipboard()
                         result.success(true)
                     }
+                    "copyWithSensitiveFlag" -> {
+                        val text = call.argument<String>("text") ?: ""
+                        copyWithSensitiveFlag(text)
+                        result.success(true)
+                    }
                     "updateEntries" -> {
                         val entries = call.argument<List<Map<String, Any?>>>("entries")
                         if (entries != null) {
@@ -68,12 +73,24 @@ class MainActivity : FlutterFragmentActivity() {
     private fun clearClipboard() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            // Android 9+: clearPrimaryClip() で履歴ごと削除
             clipboard.clearPrimaryClip()
         } else {
-            // フォールバック: 空のClipDataをセット
             clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
         }
+    }
+
+    /// Android 13+: EXTRA_IS_SENSITIVE フラグ付きでコピー
+    /// キーボードアプリ（Gboard等）がクリップボード履歴に保存しなくなる
+    private fun copyWithSensitiveFlag(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("", text)
+        if (Build.VERSION.SDK_INT >= 33) {
+            // Android 13+ (API 33): EXTRA_IS_SENSITIVE
+            clip.description.extras = android.os.PersistableBundle().apply {
+                putBoolean("android.content.extra.IS_SENSITIVE", true)
+            }
+        }
+        clipboard.setPrimaryClip(clip)
     }
 
     @Suppress("UNCHECKED_CAST")

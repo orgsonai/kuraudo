@@ -13,22 +13,36 @@ set -e
 
 echo "=== Kuraudo セットアップ ==="
 
-# [1/5] Android Kotlin ファイルを配置
+# [1/5] Android Kotlin ファイルを配置確認
 KOTLIN_DIR="android/app/src/main/kotlin/com/zerotoship/kuraudo"
 if [ -d "android" ]; then
-  echo "[1/5] Android Kotlin ファイルを配置..."
+  echo "[1/5] Android Kotlin ファイルを確認..."
   mkdir -p "$KOTLIN_DIR"
-  cp android_extra/kotlin/MainActivity.kt "$KOTLIN_DIR/"
-  cp android_extra/kotlin/KuraudoAutofillService.kt "$KOTLIN_DIR/"
+  
+  # zip内に既に正しいパスで配置済みの場合はスキップ
+  if [ -f "$KOTLIN_DIR/MainActivity.kt" ]; then
+    echo "  → Kotlin ファイル配置済み"
+  elif [ -f "android_extra/kotlin/MainActivity.kt" ]; then
+    # 旧構造のandroid_extraからコピー（互換性）
+    cp android_extra/kotlin/MainActivity.kt "$KOTLIN_DIR/"
+    cp android_extra/kotlin/KuraudoAutofillService.kt "$KOTLIN_DIR/"
+    echo "  → Kotlin ファイルをandroid_extraからコピー"
+  fi
 
   # autofill_service.xml
   mkdir -p android/app/src/main/res/xml
-  cp android_extra/xml/autofill_service.xml android/app/src/main/res/xml/
+  if [ ! -f "android/app/src/main/res/xml/autofill_service.xml" ] && [ -f "android_extra/xml/autofill_service.xml" ]; then
+    cp android_extra/xml/autofill_service.xml android/app/src/main/res/xml/
+  fi
 
-  # AndroidManifest.xml を上書き
-  cp android_extra/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+  # AndroidManifest.xml（既に配置済みなら上書きしない）
+  if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+    echo "  → AndroidManifest.xml 配置済み"
+  elif [ -f "android_extra/AndroidManifest.xml" ]; then
+    cp android_extra/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+  fi
 
-  echo "  → Kotlin + Manifest 配置完了"
+  echo "  → Android 配置確認完了"
 else
   echo "[1/5] android/ ディレクトリがありません（flutter create . を先に実行してください）"
 fi

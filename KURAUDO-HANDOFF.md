@@ -131,7 +131,7 @@ docs/              kuraudo-spec-v1.docx / store-metadata.md / android-setup.md /
 - Autofillキャッシュ: Vault解錠時＋エントリ保存時にnative側へ自動送信
 - デスクトップAutoType: Linux=xdotool、Windows=PowerShell SendKeys。未インストール時はクリップボードフォールバック
 - 検索ボックス: TextEditingController (_searchCtrl) でクリアボタン制御
-- クリップボード: copyToClipboardSensitive()（Android 13+ IS_SENSITIVE対応）、copyAndScheduleClear()、clearClipboardFully()（Linux: Wayland wl-copy --clear / X11 xclip -i /dev/null を自動検出、Windows: PowerShell、Android: clearPrimaryClip）を共通関数として使用。設定のclipboardAutoClearで制御
+- クリップボード: copyToClipboardSensitive()（Android 13+ IS_SENSITIVE対応、Linux: xclip/xsel/wl-copy外部コマンド経由でコピー）、copyAndScheduleClear()、clearClipboardFully()（Linux: xsel --delete でセレクション所有権放棄 / xclip空文字セット / wl-copy --clear を自動検出、Windows: PowerShell Clipboard::Clear()、Android: clearPrimaryClip）を共通関数として使用。設定のclipboardAutoClearで制御。AutofillService.copyToClipboard()も共通関数に統一済み
 
 ---
 *最終更新: 2026年4月3日*

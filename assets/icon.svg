@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F1114"/>
+      <stop offset="100%" stop-color="#1A1D23"/>
+    </linearGradient>
+    <linearGradient id="lockGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#16A34A"/>
+    </linearGradient>
+    <linearGradient id="shackleGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#22C55E"/>
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22C55E" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#16A34A" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#22C55E" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景の角丸四角（アプリアイコン形状） -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bgGrad)"/>
+  
+  <!-- 外枠ボーダー -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="none" stroke="url(#borderGrad)" stroke-width="2.5"/>
+
+  <!-- 内側のシールド風フレーム -->
+  <rect x="120" y="130" width="272" height="280" rx="28" ry="28" fill="none" stroke="#22C55E" stroke-opacity="0.15" stroke-width="2"/>
+
+  <!-- 南京錠のシャックル（U字部分） -->
+  <path d="M200 220 L200 175 C200 131 220 108 256 108 C292 108 312 131 312 175 L312 220" 
+        fill="none" stroke="url(#shackleGrad)" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- 南京錠のボディ -->
+  <rect x="172" y="216" width="168" height="140" rx="20" ry="20" fill="url(#lockGrad)"/>
+
+  <!-- 鍵穴 -->
+  <circle cx="256" cy="272" r="18" fill="#0F1114"/>
+  <rect x="249" y="280" width="14" height="36" rx="5" ry="5" fill="#0F1114"/>
+
+  <!-- 微妙な光沢エフェクト -->
+  <rect x="172" y="216" width="168" height="70" rx="20" ry="20" fill="white" opacity="0.08"/>
+</svg>
