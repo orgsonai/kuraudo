@@ -13,33 +13,38 @@ set -e
 
 echo "=== Kuraudo セットアップ ==="
 
-# [1/5] Android Kotlin ファイルを配置確認
+# [1/5] Android ファイルを配置確認
 KOTLIN_DIR="android/app/src/main/kotlin/com/zerotoship/kuraudo"
 if [ -d "android" ]; then
-  echo "[1/5] Android Kotlin ファイルを確認..."
+  echo "[1/5] Android ファイルを確認..."
   mkdir -p "$KOTLIN_DIR"
   
-  # zip内に既に正しいパスで配置済みの場合はスキップ
+  # Kotlin ファイル確認
   if [ -f "$KOTLIN_DIR/MainActivity.kt" ]; then
     echo "  → Kotlin ファイル配置済み"
-  elif [ -f "android_extra/kotlin/MainActivity.kt" ]; then
-    # 旧構造のandroid_extraからコピー（互換性）
-    cp android_extra/kotlin/MainActivity.kt "$KOTLIN_DIR/"
-    cp android_extra/kotlin/KuraudoAutofillService.kt "$KOTLIN_DIR/"
-    echo "  → Kotlin ファイルをandroid_extraからコピー"
+  else
+    echo "  ⚠ $KOTLIN_DIR/MainActivity.kt が見つかりません"
   fi
 
-  # autofill_service.xml
+  # autofill_service.xml 確認
   mkdir -p android/app/src/main/res/xml
-  if [ ! -f "android/app/src/main/res/xml/autofill_service.xml" ] && [ -f "android_extra/xml/autofill_service.xml" ]; then
-    cp android_extra/xml/autofill_service.xml android/app/src/main/res/xml/
+  if [ -f "android/app/src/main/res/xml/autofill_service.xml" ]; then
+    echo "  → autofill_service.xml 配置済み"
+  else
+    echo "  ⚠ android/app/src/main/res/xml/autofill_service.xml が見つかりません"
   fi
 
-  # AndroidManifest.xml（既に配置済みなら上書きしない）
+  # AndroidManifest.xml 確認
   if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
     echo "  → AndroidManifest.xml 配置済み"
-  elif [ -f "android_extra/AndroidManifest.xml" ]; then
-    cp android_extra/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+  else
+    echo "  ⚠ android/app/src/main/AndroidManifest.xml が見つかりません"
+  fi
+
+  # settings.gradle.kts を配置（flutter create が生成したものを上書き）
+  if [ -f "android/settings_gradle.kts" ]; then
+    cp android/settings_gradle.kts android/settings.gradle.kts
+    echo "  → settings.gradle.kts 配置完了"
   fi
 
   echo "  → Android 配置確認完了"
@@ -47,12 +52,17 @@ else
   echo "[1/5] android/ ディレクトリがありません（flutter create . を先に実行してください）"
 fi
 
-# [2/5] Android build.gradle.kts の minSdk を 26 に変更
+# [2/5] Android build.gradle.kts をリリース署名対応版に上書き
 GRADLE_FILE="android/app/build.gradle.kts"
-if [ -f "$GRADLE_FILE" ]; then
+GRADLE_SRC="android_app_build.gradle.kts"
+if [ -f "$GRADLE_SRC" ]; then
+  echo "[2/5] Android build.gradle.kts をリリース署名対応版に上書き..."
+  cp "$GRADLE_SRC" "$GRADLE_FILE"
+  echo "  → build.gradle.kts 上書き完了（リリース署名 + minSdk=26）"
+elif [ -f "$GRADLE_FILE" ]; then
   echo "[2/5] Android minSdk を 26 に変更..."
   sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 26/' "$GRADLE_FILE"
-  echo "  → minSdk = 26 に変更完了"
+  echo "  → minSdk = 26 に変更完了（署名設定は手動で追加してください）"
 fi
 
 # [3/5] assets ディレクトリを作成（pubspec.yaml で参照）
@@ -101,7 +111,14 @@ echo ""
 echo "Google Drive同期を有効にする場合:"
 echo "  flutter run --dart-define=GOOGLE_CLIENT_SECRET=your_secret"
 echo ""
-echo "リリースビルド:"
+echo "リリースビルド（署名設定が必要）:"
+echo "  1. keytool -genkey -v -keystore ~/kuraudo-release.keystore -alias kuraudo -keyalg RSA -keysize 2048 -validity 10000"
+echo "  2. android/key.properties を作成（storePassword, keyPassword, keyAlias, storeFile を記入）"
+echo "  3. flutter build appbundle --release   # Play Store用"
+echo "  4. flutter build apk --release         # APK"
+echo ""
+echo "  ※ key.properties と .keystore は絶対にGitにコミットしないこと！"
+echo ""
+echo "Linux/Windowsビルド:"
 echo "  flutter build linux --release --dart-define=GOOGLE_CLIENT_SECRET=your_secret"
-echo "  flutter build apk --release"
 echo "  flutter build windows --release --dart-define=GOOGLE_CLIENT_SECRET=your_secret"
