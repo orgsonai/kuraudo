@@ -88,6 +88,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _onKey(KeyEvent event) {
     if (_searchFocused) return false; // 検索フィールド入力中はスルー
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    // このHomeScreenが最前面にある時だけ処理する
+    if (!mounted) return false;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return false;
     final entries = _cachedEntries;
     final i = _focusedIndex;
     final k = event.logicalKey;

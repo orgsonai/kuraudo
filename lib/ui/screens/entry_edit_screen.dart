@@ -5,6 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/password_generator.dart';
 import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
@@ -347,15 +348,38 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             const SizedBox(height: 14),
 
             // ── メモ ──
-            TextFormField(
-              controller: _notesCtrl,
-              decoration: const InputDecoration(
-                labelText: 'メモ',
-                prefixIcon: Icon(Icons.notes_rounded, size: 20),
-                alignLabelWithHint: true,
+            KeyboardListener(
+              focusNode: FocusNode(),
+              onKeyEvent: (event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.enter) {
+                  final text = _notesCtrl.text;
+                  final selection = _notesCtrl.selection;
+                  final newText = text.replaceRange(
+                    selection.start,
+                    selection.end,
+                    '\n',
+                  );
+                  _notesCtrl.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(
+                      offset: selection.start + 1,
+                    ),
+                  );
+                }
+              },
+              child: TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'メモ',
+                  prefixIcon: Icon(Icons.notes_rounded, size: 20),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: null,
+                minLines: 4,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
               ),
-              maxLines: 4,
-              textInputAction: TextInputAction.done,
             ),
 
             const SizedBox(height: 40),
