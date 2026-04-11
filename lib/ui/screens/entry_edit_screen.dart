@@ -40,6 +40,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
   late final TextEditingController _notesCtrl;
   late final TextEditingController _categoryCtrl;
   late final TextEditingController _tagsCtrl;
+  late final TextEditingController _totpCtrl;
 
   bool _obscurePassword = true;
   bool _isSaving = false;
@@ -61,6 +62,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
       text: e?.category ?? (widget.initialCategory != '未分類' ? widget.initialCategory : '') ?? '',
     );
     _tagsCtrl = TextEditingController(text: e?.tags.join(', ') ?? '');
+    _totpCtrl = TextEditingController(text: e?.totp ?? '');
     _favorite = e?.favorite ?? false;
   }
 
@@ -83,6 +85,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
     _notesCtrl.dispose();
     _categoryCtrl.dispose();
     _tagsCtrl.dispose();
+    _totpCtrl.dispose();
     super.dispose();
   }
 
@@ -113,12 +116,13 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
         entry.notes = _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null;
         entry.category = _categoryCtrl.text.isNotEmpty ? _categoryCtrl.text : null;
         entry.tags = tags;
+        entry.totp = _totpCtrl.text.isNotEmpty ? _totpCtrl.text : null;
         entry.favorite = _favorite;
         entry.updatedAt = DateTime.now();
 
         await widget.vaultService.updateEntry(entry);
       } else {
-        await widget.vaultService.addEntry(
+        final newEntry = await widget.vaultService.addEntry(
           title: _titleCtrl.text,
           username: _usernameCtrl.text,
           password: _passwordCtrl.text,
@@ -129,6 +133,11 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
           tags: tags,
           favorite: _favorite,
         );
+        // TOTPがあれば追加保存
+        if (_totpCtrl.text.isNotEmpty) {
+          newEntry.totp = _totpCtrl.text;
+          await widget.vaultService.updateEntry(newEntry);
+        }
       }
 
       if (mounted) Navigator.pop(context, true);
@@ -380,6 +389,18 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
               ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── TOTP シークレット ──
+            TextFormField(
+              controller: _totpCtrl,
+              decoration: const InputDecoration(
+                labelText: 'TOTP シークレット',
+                hintText: 'Base32キー or otpauth://...',
+                prefixIcon: Icon(Icons.security_rounded, size: 20),
+              ),
+              textInputAction: TextInputAction.done,
             ),
 
             const SizedBox(height: 40),
