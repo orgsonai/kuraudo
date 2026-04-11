@@ -43,14 +43,18 @@
 - パスワード強度評価強化: 辞書攻撃耐性（よく使われるPW、キーボードパターン、辞書単語、リート表記検出）
 - PIN認証試行回数制限: 5回失敗でマスターパスワード強制
 - エクスポートセキュリティ強化: マスターパスワード再確認、クリップボード30秒自動クリア、ファイル削除アクション
+- Google Play クローズドテスト審査通過・公開済み（com.zerotoship.kuraudo）
+- Play Store版Google Drive同期修正: Play App SigningのSHA-1（6283e5f1d36b37f3dd07b585ceba9366d5bb4554）をGoogle Cloud ConsoleのOAuthクライアントIDに追加登録で解決
+- デスクトップ版Enterキー問題修正: home_screen.dartの_onKeyにModalRoute.isCurrent判定を追加、他画面でのEnterキーによる画面重複開きを防止
+- メモフィールド改行修正: textInputAction.newline + keyboardType.multiline + maxLines:null に変更
 
 ## 未完了
-- スクリーンショット撮影
-- Google Play 実際の公開申請
 - Microsoft Store 公開（保留中 — Windowsビルド環境が必要）
+- テスター12人集め（クローズドテスト中）
 
 ## 実機テスト済み
 - ✅ Google Drive同期（PC↔Android間、マージ同期確認済み）
+- ✅ Play Store版Google Drive同期確認済み
 - ✅ Android実機ビルド・動作確認
 - ✅ 生体認証（指紋）動作確認
 - ✅ PIN簡易ロック解除動作確認
@@ -134,4 +138,4 @@ docs/              kuraudo-spec-v1.docx / store-metadata.md / android-setup.md /
 - クリップボード: copyToClipboardSensitive()（Android 13+ IS_SENSITIVE対応、Linux: xclip/xsel/wl-copy外部コマンド経由でコピー）、copyAndScheduleClear()、clearClipboardFully()（Linux: xsel --delete でセレクション所有権放棄 / xclip空文字セット / wl-copy --clear を自動検出、Windows: PowerShell Clipboard::Clear()、Android: clearPrimaryClip）を共通関数として使用。設定のclipboardAutoClearで制御。AutofillService.copyToClipboard()も共通関数に統一済み
 
 ---
-*最終更新: 2026年4月3日*
+*最終更新: 2026年4月12日*

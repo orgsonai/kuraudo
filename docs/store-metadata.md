@@ -77,13 +77,20 @@ Open Source: https://github.com/orgsonai/kuraudo
 
 ---
 
-## Google Play
+## Google Play（公開済み）
 
 ### アプリ情報
 - **パッケージ名**: com.zerotoship.kuraudo
+- **ステータス**: クローズドテスト公開中（2026年4月10日〜）
 - **カテゴリ**: ツール
 - **価格**: 無料
-- **コンテンツレーティング**: 全ユーザー対象
+- **コンテンツレーティング**: 13歳以上対象
+- **バージョン**: 0.1.0
+
+### Play App Signing
+- **Play管理SHA-1**: `6283e5f1d36b37f3dd07b585ceba9366d5bb4554`
+- **自分のkeystore SHA-1**: `D6:DF:D7:EC:2B:D7:02:F2:AD:5B:03:CD:B1:1B:92:DF:49:3C:4E:70`
+- Google Cloud ConsoleのAndroid OAuthクライアントIDに両方登録済み
 
 ### Data Safety（データセーフティ）申告
 - **データ収集**: なし
@@ -92,12 +99,8 @@ Open Source: https://github.com/orgsonai/kuraudo
 - **データ削除**: ユーザーがアプリを削除するとすべてのローカルデータが削除される
 - **Google Drive**: ユーザーが明示的に有効化した場合のみ、ユーザー自身のDriveに暗号化データを保存
 
-### スクリーンショット要件
-- **電話**: 最低2枚（16:9、1080x1920推奨）
-- **タブレット**: 任意（7インチ/10インチ）
-
 ### 登録料
-- $25（一回きり）
+- $25（一回きり・支払済み）
 
 ---
 

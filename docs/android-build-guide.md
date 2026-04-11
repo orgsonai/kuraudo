@@ -81,6 +81,22 @@ keytool -list -v \
 
 → この値がGoogle Cloud Consoleに登録したSHA-1と一致している必要があります。
 
+> **⚠️ Play App Signing について**
+> Google Play Store経由でインストールされたアプリはGoogleが署名を書き換えるため、
+> 実際に使われるSHA-1が自分のkeystoreと異なります。
+> Play Store版でGoogle Drive同期を動かすには、**Play管理SHA-1も別途登録**が必要です。
+>
+> Play管理SHA-1の取得方法：
+> ```bash
+> # Play Storeからインストールしたapkを取得して確認
+> adb pull /data/app/~~xxx==/com.zerotoship.kuraudo-xxx==/base.apk /tmp/app.apk
+> apksigner verify --print-certs /tmp/app.apk | grep "SHA-1"
+> ```
+>
+> **Kuraudoの登録済みSHA-1一覧（Google Cloud Console）：**
+> - 自分のkeystore: `D6:DF:D7:EC:2B:D7:02:F2:AD:5B:03:CD:B1:1B:92:DF:49:3C:4E:70`
+> - Play App Signing: `6283e5f1d36b37f3dd07b585ceba9366d5bb4554`
+
 **一致していない場合：**
 1. Google Cloud Console → APIとサービス → 認証情報
 2. Android用クライアントIDを編集
