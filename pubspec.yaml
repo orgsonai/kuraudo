@@ -1,7 +1,7 @@
 name: kuraudo
 description: "Kuraudo（蔵人）- Google Drive同期型パスワードマネージャー"
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.0+3
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -38,6 +38,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.1
   msix: ^3.16.8                  # Windows MSIX インストーラー生成
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
@@ -53,3 +54,10 @@ msix_config:
   logo_path: assets/icon.png
   capabilities: internetClient
   languages: ja-jp, en-us
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "#1a1a2e"
+  adaptive_icon_foreground: "assets/icon.png"
