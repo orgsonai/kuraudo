@@ -115,17 +115,32 @@ class KuraudoFile {
   /// [jsonData] 暗号化するJSONデータ（エントリ群）
   /// [masterPassword] マスターパスワード
   /// [kdfParams] KDFパラメータ（省略時はデフォルト）
+  /// [cachedKey] キャッシュ済み派生鍵（省略時はArgon2idで毎回派生）
+  /// [cachedSalt] キャッシュ済みソルト（cachedKeyと併用）
   Uint8List encode(
     String jsonData,
     String masterPassword, {
     KdfParams kdfParams = const KdfParams(),
+    Uint8List? cachedKey,
+    Uint8List? cachedSalt,
   }) {
-    // ソルトとノンスをランダム生成
-    final salt = _engine.generateSalt();
-    final nonce = _engine.generateNonce();
+    // キャッシュ済み鍵がある場合はそれを使用（Argon2idスキップ）
+    final Uint8List salt;
+    final Uint8List key;
+    final bool shouldClearKey;
 
-    // マスターパスワードから鍵を派生
-    final key = _engine.deriveKey(masterPassword, salt, params: kdfParams);
+    if (cachedKey != null && cachedSalt != null) {
+      salt = cachedSalt;
+      key = cachedKey;
+      shouldClearKey = false; // キャッシュ鍵はクリアしない
+    } else {
+      salt = _engine.generateSalt();
+      key = _engine.deriveKey(masterPassword, salt, params: kdfParams);
+      shouldClearKey = true;
+    }
+
+    // ノンスは毎回新規生成（セキュリティ上必須）
+    final nonce = _engine.generateNonce();
 
     // JSONデータを暗号化
     final encryptedPayload = _engine.encryptJson(jsonData, key, nonce);
@@ -143,8 +158,10 @@ class KuraudoFile {
     buffer.add(header.toBytes());
     buffer.add(encryptedPayload);
 
-    // 鍵をメモリからクリア（セキュリティ対策）
-    key.fillRange(0, key.length, 0);
+    // キャッシュ鍵でない場合のみメモリからクリア
+    if (shouldClearKey) {
+      key.fillRange(0, key.length, 0);
+    }
 
     return buffer.toBytes();
   }

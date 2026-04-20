@@ -31,6 +31,10 @@ class VaultService {
   String? _filePath;
   KdfParams _kdfParams;
 
+  // 派生鍵キャッシュ（Argon2idを毎回実行しない）
+  Uint8List? _cachedKey;
+  Uint8List? _cachedSalt;
+
   VaultState _state = VaultState.locked;
 
   VaultService({
@@ -78,6 +82,9 @@ class VaultService {
     _filePath = filePath ?? await defaultFilePath;
     _state = VaultState.unlocked;
 
+    // 派生鍵をキャッシュ（初回のみArgon2id実行）
+    _deriveAndCacheKey();
+
     await save();
   }
 
@@ -104,12 +111,19 @@ class VaultService {
     // ファイルからKDFパラメータを読み込み
     final header = KuraudoHeader.fromBytes(Uint8List.fromList(fileBytes));
     _kdfParams = header.kdfParams;
+
+    // 派生鍵をキャッシュ（以降のsaveでArgon2idスキップ）
+    _deriveAndCacheKey();
   }
 
   /// Vaultをロック（メモリから平文データを消去）
   void lock() {
     _vault = null;
     _masterPassword = null;
+    // キャッシュ鍵をメモリからクリア
+    _cachedKey?.fillRange(0, _cachedKey!.length, 0);
+    _cachedKey = null;
+    _cachedSalt = null;
     _state = VaultState.locked;
   }
 
@@ -123,7 +137,13 @@ class VaultService {
     }
 
     final jsonString = _vault!.toJson();
-    final fileBytes = _kuraudoFile.encode(jsonString, _masterPassword!, kdfParams: _kdfParams);
+    final fileBytes = _kuraudoFile.encode(
+      jsonString,
+      _masterPassword!,
+      kdfParams: _kdfParams,
+      cachedKey: _cachedKey,
+      cachedSalt: _cachedSalt,
+    );
 
     final file = File(_filePath!);
     await file.parent.create(recursive: true);
@@ -216,6 +236,8 @@ class VaultService {
     if (newKdfParams != null) {
       _kdfParams = newKdfParams;
     }
+    // 新しいパスワードで鍵を再派生・キャッシュ
+    _deriveAndCacheKey();
     await save();
   }
 
@@ -245,6 +267,16 @@ class VaultService {
 
   /// UUIDで新規生成
   String generateUuid() => _uuid.v4();
+
+  /// 派生鍵をキャッシュ（Argon2idは1回だけ実行）
+  void _deriveAndCacheKey() {
+    if (_masterPassword == null) return;
+    final engine = CryptoEngine();
+    // 古いキャッシュ鍵をクリア
+    _cachedKey?.fillRange(0, _cachedKey!.length, 0);
+    _cachedSalt = engine.generateSalt();
+    _cachedKey = engine.deriveKey(_masterPassword!, _cachedSalt!, params: _kdfParams);
+  }
 
   /// アンロック状態を確認
   void _ensureUnlocked() {

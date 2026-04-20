@@ -5,7 +5,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../core/password_generator.dart';
 import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
@@ -101,6 +100,19 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
           .where((t) => t.isNotEmpty)
           .toList();
 
+      // TOTPシークレットをクリーンアップ
+      final rawTotp = _totpCtrl.text.trim();
+      String? cleanTotp;
+      if (rawTotp.isNotEmpty) {
+        if (rawTotp.startsWith('otpauth://')) {
+          // otpauth:// URI はそのまま
+          cleanTotp = rawTotp;
+        } else {
+          // 生のBase32: 空白除去 + 大文字変換
+          cleanTotp = rawTotp.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+        }
+      }
+
       if (widget.isEditing) {
         final entry = widget.existingEntry!;
 
@@ -116,7 +128,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
         entry.notes = _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null;
         entry.category = _categoryCtrl.text.isNotEmpty ? _categoryCtrl.text : null;
         entry.tags = tags;
-        entry.totp = _totpCtrl.text.isNotEmpty ? _totpCtrl.text : null;
+        entry.totp = cleanTotp;
         entry.favorite = _favorite;
         entry.updatedAt = DateTime.now();
 
@@ -134,8 +146,8 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
           favorite: _favorite,
         );
         // TOTPがあれば追加保存
-        if (_totpCtrl.text.isNotEmpty) {
-          newEntry.totp = _totpCtrl.text;
+        if (cleanTotp != null) {
+          newEntry.totp = cleanTotp;
           await widget.vaultService.updateEntry(newEntry);
         }
       }
@@ -357,38 +369,17 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             const SizedBox(height: 14),
 
             // ── メモ ──
-            KeyboardListener(
-              focusNode: FocusNode(),
-              onKeyEvent: (event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.enter) {
-                  final text = _notesCtrl.text;
-                  final selection = _notesCtrl.selection;
-                  final newText = text.replaceRange(
-                    selection.start,
-                    selection.end,
-                    '\n',
-                  );
-                  _notesCtrl.value = TextEditingValue(
-                    text: newText,
-                    selection: TextSelection.collapsed(
-                      offset: selection.start + 1,
-                    ),
-                  );
-                }
-              },
-              child: TextFormField(
-                controller: _notesCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'メモ',
-                  prefixIcon: Icon(Icons.notes_rounded, size: 20),
-                  alignLabelWithHint: true,
-                ),
-                maxLines: null,
-                minLines: 4,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
+            TextFormField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(
+                labelText: 'メモ',
+                prefixIcon: Icon(Icons.notes_rounded, size: 20),
+                alignLabelWithHint: true,
               ),
+              maxLines: null,
+              minLines: 4,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
             ),
             const SizedBox(height: 14),
 

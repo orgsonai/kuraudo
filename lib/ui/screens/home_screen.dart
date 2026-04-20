@@ -71,6 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _multiSelectMode = false;
   final Set<String> _selectedUuids = {};
 
+  // ダッシュボード統計キャッシュ（buildのたびに再計算しない）
+  int _cachedWeakCount = 0;
+  int _cachedDupCount = 0;
+  bool _statsDirty = true;
+
   @override
   void initState() {
     super.initState();
@@ -138,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_selectedCategory != null && !_categories.contains(_selectedCategory)) {
       _selectedCategory = null;
     }
-    _markDirty(); setState(() {});
+    _markDirty(); _statsDirty = true; setState(() {});
   }
 
   void _showStatus(String msg) { _statusMessage = msg; setState(() {}); Future.delayed(const Duration(seconds: 4), () { if (mounted && _statusMessage == msg) setState(() => _statusMessage = ''); }); }
@@ -199,8 +204,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ── ダッシュボード統計 ──
-  int get _weakCount { final gen = PasswordGenerator(); int c = 0; for (final e in widget.vaultService.vault?.activeEntries ?? []) { final s = gen.evaluateStrength(e.password); if (s == PasswordStrength.veryWeak || s == PasswordStrength.weak) c++; } return c; }
-  int get _duplicatePasswordCount { final pws = <String, int>{}; for (final e in widget.vaultService.vault?.activeEntries ?? []) { if (e.password.isNotEmpty) pws[e.password] = (pws[e.password] ?? 0) + 1; } return pws.values.where((c) => c > 1).fold(0, (a, b) => a + b); }
+  void _updateStatsIfNeeded() {
+    if (!_statsDirty) return;
+    final gen = PasswordGenerator();
+    int weak = 0;
+    final pws = <String, int>{};
+    for (final e in widget.vaultService.vault?.activeEntries ?? []) {
+      final s = gen.evaluateStrength(e.password);
+      if (s == PasswordStrength.veryWeak || s == PasswordStrength.weak) weak++;
+      if (e.password.isNotEmpty) pws[e.password] = (pws[e.password] ?? 0) + 1;
+    }
+    _cachedWeakCount = weak;
+    _cachedDupCount = pws.values.where((c) => c > 1).fold(0, (a, b) => a + b);
+    _statsDirty = false;
+  }
+  int get _weakCount { _updateStatsIfNeeded(); return _cachedWeakCount; }
+  int get _duplicatePasswordCount { _updateStatsIfNeeded(); return _cachedDupCount; }
   List<VaultEntry> get _expiredPasswords { if (widget.passwordExpiryDays <= 0) return []; final cutoff = DateTime.now().subtract(Duration(days: widget.passwordExpiryDays)); return (widget.vaultService.vault?.activeEntries ?? []).where((e) => e.updatedAt.isBefore(cutoff)).toList(); }
 
   List<Widget> _buildStatsBadges(ColorScheme cs) {
