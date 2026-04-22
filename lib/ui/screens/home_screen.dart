@@ -76,6 +76,15 @@ class _HomeScreenState extends State<HomeScreen> {
   int _cachedDupCount = 0;
   bool _statsDirty = true;
 
+  // カテゴリ・期限切れ・件数キャッシュ（buildのたびに再計算しない）
+  List<String> _cachedCategories = const [];
+  Map<String, int> _cachedCategoryCounts = const {};
+  List<VaultEntry> _cachedExpiredPasswords = const [];
+  int _cachedActiveCount = 0;
+  int _cachedFavoritesCount = 0;
+  int _cachedTrashedCount = 0;
+  bool _metaDirty = true;
+
   @override
   void initState() {
     super.initState();
@@ -136,10 +145,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _markDirty() => _dirty = true;
-  List<String> get _categories { final c = <String>{}; for (final e in widget.vaultService.vault?.activeEntries ?? []) c.add(e.category ?? '未分類'); return c.toList()..sort(); }
-  Map<String, int> get _categoryCounts { final m = <String, int>{}; for (final e in widget.vaultService.vault?.activeEntries ?? []) { final c = e.category ?? '未分類'; m[c] = (m[c] ?? 0) + 1; } return m; }
+
+  // ── メタ情報（カテゴリ / 件数 / 期限切れ）を一度の走査でまとめて更新 ──
+  void _updateMetaIfNeeded() {
+    if (!_metaDirty) return;
+    final active = widget.vaultService.vault?.activeEntries ?? const <VaultEntry>[];
+    final cats = <String>{};
+    final counts = <String, int>{};
+    final expired = <VaultEntry>[];
+    int favs = 0;
+    final cutoff = widget.passwordExpiryDays > 0
+        ? DateTime.now().subtract(Duration(days: widget.passwordExpiryDays))
+        : null;
+    for (final e in active) {
+      final c = e.category ?? '未分類';
+      cats.add(c);
+      counts[c] = (counts[c] ?? 0) + 1;
+      if (e.favorite) favs++;
+      if (cutoff != null && e.updatedAt.isBefore(cutoff)) expired.add(e);
+    }
+    _cachedCategories = cats.toList()..sort();
+    _cachedCategoryCounts = counts;
+    _cachedExpiredPasswords = expired;
+    _cachedActiveCount = active.length;
+    _cachedFavoritesCount = favs;
+    _cachedTrashedCount = widget.vaultService.vault?.trashedEntries.length ?? 0;
+    _metaDirty = false;
+  }
+
+  List<String> get _categories { _updateMetaIfNeeded(); return _cachedCategories; }
+  Map<String, int> get _categoryCounts { _updateMetaIfNeeded(); return _cachedCategoryCounts; }
+  List<VaultEntry> get _expiredPasswords { _updateMetaIfNeeded(); return _cachedExpiredPasswords; }
+  int get _activeCount { _updateMetaIfNeeded(); return _cachedActiveCount; }
+  int get _favoritesCount { _updateMetaIfNeeded(); return _cachedFavoritesCount; }
+  int get _trashedCount { _updateMetaIfNeeded(); return _cachedTrashedCount; }
+
   void _refresh() {
     // 選択中のカテゴリにエントリが無くなった場合はリセット
+    _metaDirty = true;
     if (_selectedCategory != null && !_categories.contains(_selectedCategory)) {
       _selectedCategory = null;
     }
@@ -220,7 +263,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   int get _weakCount { _updateStatsIfNeeded(); return _cachedWeakCount; }
   int get _duplicatePasswordCount { _updateStatsIfNeeded(); return _cachedDupCount; }
-  List<VaultEntry> get _expiredPasswords { if (widget.passwordExpiryDays <= 0) return []; final cutoff = DateTime.now().subtract(Duration(days: widget.passwordExpiryDays)); return (widget.vaultService.vault?.activeEntries ?? []).where((e) => e.updatedAt.isBefore(cutoff)).toList(); }
 
   List<Widget> _buildStatsBadges(ColorScheme cs) {
     final badges = <Widget>[];
@@ -357,7 +399,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final isWide = MediaQuery.of(context).size.width >= 700;
     return Listener(
       onPointerDown: (_) => widget.onInteraction?.call(),
-      onPointerMove: (_) => widget.onInteraction?.call(),
       child: Scaffold(
       appBar: AppBar(title: _multiSelectMode ? Text('${_selectedUuids.length}件選択中') : const Text('Kuraudo'),
         leading: _multiSelectMode
@@ -387,12 +428,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _wide(List<VaultEntry> entries, ColorScheme cs) => Row(children: [
     SizedBox(width: 220, child: Container(decoration: BoxDecoration(border: Border(right: BorderSide(color: cs.outline))), child: Column(children: [
       Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 8), child: Row(children: [Icon(Icons.folder_rounded, size: 16, color: cs.onSurfaceVariant), const SizedBox(width: 6), Text('フォルダ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))])),
-      _FT(label: 'すべて', count: widget.vaultService.vault?.activeEntries.length ?? 0, sel: _selectedCategory == null && !_showFavoritesOnly && !_showTrash, icon: Icons.all_inbox_rounded, onTap: () { _showTrash = false; _setCategory(null); }),
-      _FT(label: 'お気に入り', count: widget.vaultService.vault?.favorites.length ?? 0, sel: _showFavoritesOnly, icon: Icons.star_rounded, iconColor: KuraudoTheme.warning, onTap: _setFavFilter),
+      _FT(label: 'すべて', count: _activeCount, sel: _selectedCategory == null && !_showFavoritesOnly && !_showTrash, icon: Icons.all_inbox_rounded, onTap: () { _showTrash = false; _setCategory(null); }),
+      _FT(label: 'お気に入り', count: _favoritesCount, sel: _showFavoritesOnly, icon: Icons.star_rounded, iconColor: KuraudoTheme.warning, onTap: _setFavFilter),
       const Divider(height: 1, indent: 16, endIndent: 16),
       Expanded(child: ListView(children: [for (final cat in _categories) _FT(label: cat, count: _categoryCounts[cat] ?? 0, sel: _selectedCategory == cat && !_showTrash, icon: Icons.folder_rounded, onTap: () => _setCategory(_selectedCategory == cat ? null : cat), onRename: () => _renameCategory(cat))])),
       const Divider(height: 1, indent: 16, endIndent: 16),
-      _FT(label: 'ゴミ箱', count: widget.vaultService.vault?.trashedEntries.length ?? 0, sel: _showTrash, icon: Icons.delete_rounded, iconColor: KuraudoTheme.danger, onTap: _setTrashView),
+      _FT(label: 'ゴミ箱', count: _trashedCount, sel: _showTrash, icon: Icons.delete_rounded, iconColor: KuraudoTheme.danger, onTap: _setTrashView),
     ]))),
     Expanded(child: _showTrash ? _trashList(entries, cs) : _pcList(entries, cs)),
   ]);
@@ -521,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _mobList(List<VaultEntry> entries, ColorScheme cs) => Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 700), child: Column(children: [
     Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: TextField(controller: _searchCtrl, onChanged: (v) { _searchQuery = v; _markDirty(); setState(() {}); }, decoration: InputDecoration(hintText: 'エントリを検索...', prefixIcon: const Icon(Icons.search_rounded, size: 20), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded, size: 18), tooltip: 'クリア', onPressed: () { _searchCtrl.clear(); _searchQuery = ''; _markDirty(); setState(() {}); }) : null, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)))),
-    if (_categories.length > 1) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(10), border: Border.all(color: cs.outline)), child: DropdownButtonHideUnderline(child: DropdownButton<String?>(value: _selectedCategory, isExpanded: true, icon: const Icon(Icons.folder_rounded, size: 18), hint: const Text('すべてのカテゴリ', style: TextStyle(fontSize: 13)), style: TextStyle(fontSize: 13, color: cs.onSurface), dropdownColor: cs.surfaceContainerHighest, items: [DropdownMenuItem<String?>(value: null, child: Row(children: [const Icon(Icons.all_inbox_rounded, size: 16), const SizedBox(width: 8), const Text('すべて'), const Spacer(), Text('${widget.vaultService.vault?.activeEntries.length ?? 0}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace'))])), ..._categories.map((c) => DropdownMenuItem<String?>(value: c, child: Row(children: [const Icon(Icons.folder_rounded, size: 16), const SizedBox(width: 8), Expanded(child: Text(c, overflow: TextOverflow.ellipsis)), Text('${_categoryCounts[c] ?? 0}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace')), const SizedBox(width: 4), GestureDetector(onTap: () => _renameCategory(c), child: Icon(Icons.edit_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)))])))], onChanged: (v) => _setCategory(v))))),
+    if (_categories.length > 1) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(10), border: Border.all(color: cs.outline)), child: DropdownButtonHideUnderline(child: DropdownButton<String?>(value: _selectedCategory, isExpanded: true, icon: const Icon(Icons.folder_rounded, size: 18), hint: const Text('すべてのカテゴリ', style: TextStyle(fontSize: 13)), style: TextStyle(fontSize: 13, color: cs.onSurface), dropdownColor: cs.surfaceContainerHighest, items: [DropdownMenuItem<String?>(value: null, child: Row(children: [const Icon(Icons.all_inbox_rounded, size: 16), const SizedBox(width: 8), const Text('すべて'), const Spacer(), Text('$_activeCount', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace'))])), ..._categories.map((c) => DropdownMenuItem<String?>(value: c, child: Row(children: [const Icon(Icons.folder_rounded, size: 16), const SizedBox(width: 8), Expanded(child: Text(c, overflow: TextOverflow.ellipsis)), Text('${_categoryCounts[c] ?? 0}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace')), const SizedBox(width: 4), GestureDetector(onTap: () => _renameCategory(c), child: Icon(Icons.edit_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)))])))], onChanged: (v) => _setCategory(v))))),
     const SizedBox(height: 8),
     Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Row(children: [Text('${entries.length}件', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontFamily: 'monospace'))])),
     const SizedBox(height: 4),
