@@ -191,13 +191,25 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         (_autoLockMinutes < 0 || elapsedSeconds < _pinThresholdMinutes * 60);
     if (canQuickUnlock) {
       _quickLocked = true;
+      _popAllChildRoutes();
       setState(() {});
     } else {
       // 長時間 or PIN/生体無効 → 完全ロック
       _quickLocked = false;
       _vaultService.lock();
+      _popAllChildRoutes();
       setState(() {});
     }
+  }
+
+  /// ロック発動時に、上に積まれている子画面（設定・エントリ詳細など）を全てpopして
+  /// ロック画面が確実に最前面になるようにする
+  void _popAllChildRoutes() {
+    if (!mounted) return;
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
+    if (navigator == null) return;
+    // 最下層（MaterialApp.home）だけ残して全てpop
+    navigator.popUntil((route) => route.isFirst);
   }
 
   /// フォアグラウンド操作検知用（HomeScreenから呼ばれる）
