@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -81,6 +82,9 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   bool _quickLocked = false;    // true=短時間ロック（PIN可）, false=通常ロック（マスターPW必須）
   final _secureStorage = const FlutterSecureStorage();
 
+  // フォアグラウンド無操作監視用タイマー（30秒ごとに_checkAutoLockを呼ぶ）
+  Timer? _idleTimer;
+
   @override
   void initState() {
     super.initState();
@@ -94,10 +98,26 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       _updateAutofillCache();
     };
     _loadSettings();
+    _startIdleTimer();
+  }
+
+  // ── フォアグラウンド無操作監視 ──
+  // 定期的に_checkAutoLock()を呼び、設定されたタイムアウトを超えていたらロックする。
+  // 周期は自動ロック設定に応じて調整（1分設定なら10秒、それ以上なら30秒）。
+  void _startIdleTimer() {
+    _idleTimer?.cancel();
+    // 自動ロック無効・即時ロックはタイマー不要
+    if (_autoLockMinutes <= 0) return;
+    final periodSec = _autoLockMinutes == 1 ? 10 : 30;
+    _idleTimer = Timer.periodic(Duration(seconds: periodSec), (_) {
+      if (!mounted) return;
+      _checkAutoLock();
+    });
   }
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -134,6 +154,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       _lastActiveTime = null;
       return;
     }
+    // すでに画面ロック中なら何もしない（ロック画面でタイマーが走り続けるのを防ぐ）
+    if (_quickLocked) return;
 
     bool shouldLock = false;
     int elapsedSeconds = 0;
@@ -213,6 +235,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       final exists = await _vaultService.vaultFileExists();
       setState(() { _isNewVault = !exists; _isLoading = false; });
     }
+    // 保存済み設定でタイマーを再起動（周期調整のため）
+    _startIdleTimer();
   }
 
   Future<void> _saveSettings() async {
@@ -286,7 +310,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         onInteraction: resetInteractionTime,
         autoLockMinutes: _autoLockMinutes,
         passwordExpiryDays: _passwordExpiryDays,
-        onAutoLockChanged: (v) { _autoLockMinutes = v; _saveSettings(); },
+        onAutoLockChanged: (v) { _autoLockMinutes = v; _saveSettings(); _startIdleTimer(); },
         onPasswordExpiryChanged: (v) { _passwordExpiryDays = v; _saveSettings(); },
         themeMode: _themeModeStr,
         onThemeModeChanged: _onThemeModeChanged,
