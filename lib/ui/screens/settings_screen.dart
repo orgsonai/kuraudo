@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../services/csv_importer.dart';
 import '../../services/vault_service.dart';
 import '../../services/autofill_service.dart';
@@ -82,6 +83,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late int _pinThresholdMinutes;
   bool _biometricAvailable = false;
 
+  String _appVersion = '';
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +98,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _biometricEnabled = widget.biometricEnabled;
     _pinThresholdMinutes = widget.pinThresholdMinutes;
     _checkBiometric();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = 'v${info.version}');
+    } catch (_) {
+      if (mounted) setState(() => _appVersion = '');
+    }
   }
 
   Future<void> _checkBiometric() async {
@@ -742,7 +755,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'v0.1.0',
+                          _appVersion,
                           style: TextStyle(
                             fontSize: 10,
                             fontFamily: 'monospace',

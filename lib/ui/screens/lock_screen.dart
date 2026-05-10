@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../services/vault_service.dart';
 import '../theme/kuraudo_theme.dart';
 
@@ -70,6 +71,8 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
   late AnimationController _animController;
   late Animation<double> _fadeIn;
 
+  String _appVersion = '';
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +87,17 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     // quickLocked時に生体認証を自動トリガー
     if (widget.quickLocked && widget.biometricEnabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
+    }
+
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = 'v${info.version}');
+    } catch (_) {
+      if (mounted) setState(() => _appVersion = '');
     }
   }
 
@@ -497,7 +511,7 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 16),
 
                     // バージョン
-                    Text('v0.1.0', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5), fontFamily: 'monospace')),
+                    Text(_appVersion, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5), fontFamily: 'monospace')),
                     const SizedBox(height: 40),
                   ],
                 ),
