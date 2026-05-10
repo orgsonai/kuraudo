@@ -37,6 +37,9 @@ dependencies:
   webdav_client: ^1.2.2          # WebDAV同期（Nextcloud, Synology等）
   file_picker: ^8.1.2            # ローカルパス同期のディレクトリ選択UI
 
+  # pubspec.yamlのバージョン取得
+  package_info_plus: ^8.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -57,3 +60,4 @@ msix_config:
   logo_path: assets/icon.png
   capabilities: internetClient
   languages: ja-jp, en-us
+
