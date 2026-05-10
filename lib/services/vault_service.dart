@@ -57,6 +57,8 @@ class VaultService {
   int get entryCount => _vault?.entries.length ?? 0;
 
   /// デフォルトの保存パスを取得
+  /// 注: 「ドキュメントフォルダを使わない」要件のため、通常はユーザー指定パスを使う。
+  /// このメソッドはレガシー互換用フォールバック。lock_screen等で利用箇所を整理予定。
   Future<String> get defaultFilePath async {
     final dir = await getApplicationDocumentsDirectory();
     return '${dir.path}/kuraudo.kuraudo';
@@ -147,10 +149,51 @@ class VaultService {
 
     final file = File(_filePath!);
     await file.parent.create(recursive: true);
+
+    // 既存ファイルがあればバックアップを作成（kuraudo_backups/ サブフォルダに最新3世代）
+    if (await file.exists()) {
+      try {
+        await _createBackup(file);
+      } catch (_) {
+        // バックアップ失敗は保存を妨げない
+      }
+    }
+
     await file.writeAsBytes(fileBytes);
 
     // 保存後コールバック（SyncManagerへ通知）
     onSaved?.call();
+  }
+
+  /// 既存Vaultファイルを kuraudo_backups/ サブフォルダにコピー（最新3世代保持）
+  Future<void> _createBackup(File source) async {
+    final parentDir = source.parent;
+    final backupDir = Directory('${parentDir.path}${Platform.pathSeparator}kuraudo_backups');
+    await backupDir.create(recursive: true);
+
+    final baseName = source.uri.pathSegments.last; // e.g. kuraudo.kuraudo
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+    final backupPath = '${backupDir.path}${Platform.pathSeparator}$baseName.$timestamp.bak';
+
+    await source.copy(backupPath);
+
+    // 古いバックアップを削除（最新3世代のみ保持）
+    final pattern = '$baseName.';
+    final entries = await backupDir.list().toList();
+    final backups = entries
+        .whereType<File>()
+        .where((f) {
+          final n = f.uri.pathSegments.last;
+          return n.startsWith(pattern) && n.endsWith('.bak');
+        })
+        .toList()
+      ..sort((a, b) => b.path.compareTo(a.path)); // タイムスタンプ降順 (新しい順)
+
+    if (backups.length > 3) {
+      for (final old in backups.sublist(3)) {
+        try { await old.delete(); } catch (_) {}
+      }
+    }
   }
 
   /// エントリを追加

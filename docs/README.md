@@ -1,11 +1,11 @@
 # Kuraudo（蔵人）
 
 <p align="center">
-  <strong>ローカル・ファースト × Google Drive同期のパスワードマネージャー</strong>
+  <strong>ローカル・ファースト × 選べる同期方式のパスワードマネージャー</strong>
 </p>
 
 <p align="center">
-  Argon2id + AES-256-GCM | Flutter | Linux · Android（Windows版は保留中）
+  Argon2id + AES-256-GCM | Flutter | Linux · Android · Windows
 </p>
 
 ---
@@ -14,9 +14,20 @@
 
 - **商用レベルの暗号化** — Argon2id (KDF) + AES-256-GCM。データファイルが流出しても、マスターパスワードなしでは解読不可能
 - **ローカル・ファースト** — データは常にローカルに保存。オフラインでも完全に動作
-- **Google Drive同期** — ユーザー自身のDriveに暗号化ファイルをアップロード。開発者はデータに一切アクセスできない
-- **クロスプラットフォーム** — Linux / Android を単一コードベースで対応（Windows版は保留中）
+- **3つの同期方式から選択** — Google Drive / WebDAV（Nextcloud等） / ローカルパス（SMB・外付けドライブ等）の中から1つ選んで使用可能。Googleアカウントを使いたくない場合は他の方式を選べる
+- **クロスプラットフォーム** — Linux / Android / Windows を単一コードベースで対応
+- **設定もデータと同じ場所に** — 設定ファイル・バックアップはVaultと同じフォルダに配置（OS既定領域を汚さない）
 - **オープンソース** — ソースコードを公開。誰でも監査可能
+
+## 同期方式
+
+| 方式 | 説明 | 想定ユーザー |
+|------|------|-----------|
+| **Google Drive** | Googleアカウントの App Data Folder に暗号化ファイルを保存 | 手軽にクラウド同期したい |
+| **WebDAV** | Nextcloud / Synology / 自前WebDAVサーバーに HTTPS Basic 認証で接続 | 自分のサーバーを持っている |
+| **ローカルパス** | SMBマウント先 / 外付けドライブ / 共有フォルダなどへ直接ファイルコピー | LAN内NAS、ネット非接続環境 |
+
+選択した方式は同期画面右上の ⇄ ボタンからいつでも切り替え可能。複数方式の同時利用は非対応。
 
 ## スクリーンショット
 
@@ -25,7 +36,7 @@
 ## インストール
 
 ### Microsoft Store（Windows）
-（保留中 — Windows環境でのビルドが必要です）
+（提出未着手 — Windows向けビルドは可能、`docs/windows-build-guide.md` 参照）
 
 ### GitHub Releases
 [Releases](https://github.com/orgsonai/kuraudo/releases) から各プラットフォーム向けのインストーラーをダウンロード。
@@ -46,7 +57,7 @@ flutter run
 # リリースビルド
 flutter build linux     # Linux
 flutter build apk       # Android
-# flutter build windows # Windows（保留中 — Windowsホストが必要）
+flutter build windows   # Windows（Windowsホスト + Visual Studio 2022 必要）
 ```
 
 #### 前提条件
@@ -55,7 +66,7 @@ flutter build apk       # Android
 - Dart SDK 3.2+
 - （Linux）`clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`
 - （Android）Android Studio + Android SDK
-- （Windows — 保留中）Visual Studio 2022 + C++ Desktop workload
+- （Windows）Visual Studio 2022 + C++ Desktop workload。詳細は `docs/windows-build-guide.md`
 
 #### Google Drive同期を有効にする場合
 

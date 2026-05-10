@@ -17,6 +17,8 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'sync_backend.dart';
+
 /// Google認証ヘッダーを付与するHTTPクライアント
 class _GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
@@ -64,7 +66,7 @@ enum SyncAction {
 }
 
 /// Google Drive 同期サービス
-class GoogleDriveService {
+class GoogleDriveService implements SyncBackend {
   static const String _mimeType = 'application/octet-stream';
 
   // OAuth2 設定（デスクトップ用）
@@ -99,11 +101,41 @@ class GoogleDriveService {
     bool useAppDataFolder = true,
   }) : _useAppDataFolder = useAppDataFolder;
 
+  @override
   SyncStatus get status => _status;
   bool get isSignedIn => _accessToken != null && _driveApi != null;
   String? get accountEmail => _email;
 
+  // ── SyncBackend インターフェース実装 ──
+
+  @override
+  SyncBackendInfo get info => const SyncBackendInfo(
+        kind: SyncBackendKind.googleDrive,
+        displayName: 'Google Drive',
+        backendId: 'gdrive',
+        requiresNetwork: true,
+      );
+
+  @override
+  bool get isReady => isSignedIn;
+
+  @override
+  String? get displayLabel => accountEmail;
+
+  /// SyncBackend.connect() の実装: 既存 signIn() を呼ぶ
+  @override
+  Future<bool> connect() => signIn();
+
+  /// SyncBackend.silentConnect() の実装: 既存 silentSignIn() を呼ぶ
+  @override
+  Future<bool> silentConnect() => silentSignIn();
+
+  /// SyncBackend.disconnect() の実装: 既存 signOut() を呼ぶ
+  @override
+  Future<void> disconnect() => signOut();
+
   /// ActiveVault名を設定（同期対象ファイル名に使用）
+  @override
   void setVaultName(String name) {
     _vaultName = name.replaceAll(RegExp(r'[^\w\-]'), '_'); // ファイル名安全化
   }
@@ -414,6 +446,7 @@ class GoogleDriveService {
     }
   }
 
+  @override
   Future<SyncResult> upload(Uint8List fileBytes) async {
     if (_driveApi == null) return SyncResult(status: SyncStatus.notSignedIn, message: 'Googleアカウントにサインインしてください');
     if (!await _ensureValidToken()) return SyncResult(status: SyncStatus.error, message: 'トークンの更新に失敗しました');
@@ -438,6 +471,7 @@ class GoogleDriveService {
     }
   }
 
+  @override
   Future<Uint8List?> download() async {
     if (_driveApi == null) return null;
     if (!await _ensureValidToken()) return null;
@@ -457,6 +491,7 @@ class GoogleDriveService {
     }
   }
 
+  @override
   Future<DateTime?> getRemoteModifiedTime() async {
     final remoteFile = await _findRemoteFile();
     return remoteFile?.modifiedTime;
@@ -465,28 +500,47 @@ class GoogleDriveService {
   // ── 最終同期時刻の管理 ──
 
   DateTime? _lastSyncTime;
+  @override
   DateTime? get lastSyncTime => _lastSyncTime;
 
-  Future<String> get _syncStatePath async {
-    final dir = await getApplicationDocumentsDirectory();
-    return '${dir.path}/kuraudo_sync_state.json';
-  }
+  /// SecureStorage上の最終同期時刻キー
+  static const String _kLastSyncTimeKey = 'gdrive_last_sync_time';
 
   Future<void> _saveLastSyncTime() async {
+    if (_lastSyncTime == null) return;
     try {
-      final file = File(await _syncStatePath);
-      await file.writeAsString(jsonEncode({'lastSyncTime': _lastSyncTime?.toIso8601String()}));
+      await _secureStorage.write(
+        key: _kLastSyncTimeKey,
+        value: _lastSyncTime!.toIso8601String(),
+      );
     } catch (_) {}
   }
 
+  @override
   Future<void> loadLastSyncTime() async {
     try {
-      final file = File(await _syncStatePath);
-      if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-        final t = json['lastSyncTime'] as String?;
-        if (t != null) _lastSyncTime = DateTime.parse(t);
+      // SecureStorageから読み込み（v3.0以降の保存先）
+      final s = await _secureStorage.read(key: _kLastSyncTimeKey);
+      if (s != null) {
+        _lastSyncTime = DateTime.tryParse(s);
+        return;
       }
+
+      // 旧形式（kuraudo_sync_state.json）からのマイグレーション
+      // v2.x以前の互換: ドキュメントフォルダのJSONファイルを読み、SecureStorageへ移動して旧ファイル削除
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final oldFile = File('${dir.path}/kuraudo_sync_state.json');
+        if (await oldFile.exists()) {
+          final json = jsonDecode(await oldFile.readAsString()) as Map<String, dynamic>;
+          final t = json['lastSyncTime'] as String?;
+          if (t != null) {
+            _lastSyncTime = DateTime.tryParse(t);
+            await _saveLastSyncTime();
+          }
+          await oldFile.delete();
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -495,6 +549,7 @@ class GoogleDriveService {
   /// - 前回同期以降にローカルが変更されていたらアップロード
   /// - 前回同期以降にリモートが変更されていたらダウンロード
   /// - 両方変更されていたらマージを推奨
+  @override
   Future<SyncResult> smartSync({
     required Uint8List localFileBytes,
     required DateTime localModifiedAt,
@@ -543,6 +598,7 @@ class GoogleDriveService {
   }
 
   /// アップロード後に同期時刻を更新するラッパー
+  @override
   Future<SyncResult> uploadAndRecord(Uint8List fileBytes) async {
     final result = await upload(fileBytes);
     if (result.status == SyncStatus.success) {
@@ -557,6 +613,7 @@ class GoogleDriveService {
   static const int _maxBackups = 3;
 
   /// バックアップを作成（Drive上に世代管理）
+  @override
   Future<SyncResult> createBackup(Uint8List fileBytes, {String label = 'manual'}) async {
     if (_driveApi == null) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     if (!await _ensureValidToken()) return SyncResult(status: SyncStatus.error, message: 'トークン更新失敗');
@@ -601,7 +658,28 @@ class GoogleDriveService {
   }
 
   /// バックアップ一覧を取得
-  Future<List<drive.File>> listBackups() async {
+  /// バックアップ一覧（SyncBackend仕様: バックエンド非依存型を返す）
+  @override
+  Future<List<SyncBackupEntry>> listBackups() async {
+    final files = await _listBackupFiles();
+    return files.map((f) {
+      // ファイル名末尾にラベルが含まれる: kuraudo_backup_<vault>_<label>_<timestamp>.kuraudo
+      String? label;
+      final name = f.name ?? '';
+      final m = RegExp(r'kuraudo_backup_.+?_(manual|auto)_').firstMatch(name);
+      if (m != null) label = m.group(1);
+      return SyncBackupEntry(
+        id: f.id ?? '',
+        name: name,
+        modifiedAt: f.modifiedTime,
+        sizeBytes: int.tryParse(f.size ?? ''),
+        label: label,
+      );
+    }).toList();
+  }
+
+  /// 内部用: drive.File のリストとして取得
+  Future<List<drive.File>> _listBackupFiles() async {
     if (_driveApi == null) return [];
     if (!await _ensureValidToken()) return [];
     _setupDriveApi();
@@ -616,6 +694,7 @@ class GoogleDriveService {
   }
 
   /// 指定バックアップからリストア
+  @override
   Future<Uint8List?> downloadBackup(String fileId) async {
     if (_driveApi == null) return null;
     if (!await _ensureValidToken()) return null;
@@ -636,6 +715,7 @@ class GoogleDriveService {
     return smartSync(localFileBytes: localFileBytes, localModifiedAt: localModifiedAt);
   }
 
+  @override
   Future<bool> deleteRemoteFile() async {
     if (_driveApi == null) return false;
     try {

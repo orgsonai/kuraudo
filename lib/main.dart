@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/vault_service.dart';
 import 'services/google_drive_service.dart';
+import 'services/sync_backend.dart';
+import 'services/local_path_backend.dart';
+import 'services/webdav_backend.dart';
 import 'services/sync_manager.dart';
 import 'services/autofill_service.dart';
 import 'ui/theme/kuraudo_theme.dart';
@@ -58,7 +60,24 @@ class KuraudoRoot extends StatefulWidget {
 
 class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   final VaultService _vaultService = VaultService();
-  final GoogleDriveService _driveService = GoogleDriveService();
+
+  // 利用可能な全バックエンド（必要な時にインスタンス生成、ここでは事前確保）
+  final GoogleDriveService _googleDriveBackend = GoogleDriveService();
+  final WebDAVBackend _webdavBackend = WebDAVBackend();
+  final LocalPathBackend _localPathBackend = LocalPathBackend();
+
+  /// 現在選択されている同期方式
+  SyncBackendKind _backendKind = SyncBackendKind.googleDrive;
+
+  /// 現在のバックエンド実体
+  SyncBackend get _currentBackend {
+    switch (_backendKind) {
+      case SyncBackendKind.googleDrive: return _googleDriveBackend;
+      case SyncBackendKind.webdav: return _webdavBackend;
+      case SyncBackendKind.localPath: return _localPathBackend;
+    }
+  }
+
   late final SyncManager _syncManager;
 
   bool _isLoading = true;
@@ -89,7 +108,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _syncManager = SyncManager(vaultService: _vaultService, driveService: _driveService);
+    _syncManager = SyncManager(vaultService: _vaultService, backend: _currentBackend);
     // 保存時コールバック: リアルタイム同期 + Autofillキャッシュ更新
     _vaultService.onSaved = () {
       if (_autoSyncEnabled && _realtimeSyncEnabled) {
@@ -217,45 +236,69 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     _lastInteractionTime = DateTime.now();
   }
 
-  Future<String> get _settingsPath async {
-    final dir = await getApplicationDocumentsDirectory();
-    return '${dir.path}/kuraudo_settings.json';
+  /// SecureStorageに保存するキー: 最後に使ったVaultのフルパス
+  static const String _kVaultPathKey = 'vault_path';
+
+  /// 設定ファイルのパスを取得（Vaultと同じフォルダの kuraudo_settings.json）
+  /// Vaultパスが未確定の場合は null を返す
+  String? get _settingsPath {
+    if (_lastVaultPath == null) return null;
+    final dir = File(_lastVaultPath!).parent.path;
+    return '$dir${Platform.pathSeparator}kuraudo_settings.json';
   }
 
   Future<void> _loadSettings() async {
+    // 1. SecureStorageから前回のVaultパスを取得
     try {
-      final file = File(await _settingsPath);
-      if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-        _lastVaultPath = json['lastVaultPath'] as String?;
-        _autoLockMinutes = json['autoLockMinutes'] as int? ?? 5;
-        _passwordExpiryDays = json['passwordExpiryDays'] as int? ?? 90;
-        _themeModeStr = json['themeMode'] as String? ?? 'dark';
-        _autoSyncEnabled = json['autoSyncEnabled'] as bool? ?? true;
-        _realtimeSyncEnabled = json['realtimeSyncEnabled'] as bool? ?? true;
-        _clipboardAutoClear = json['clipboardAutoClear'] as bool? ?? true;
-        _pinEnabled = json['pinEnabled'] as bool? ?? false;
-        _biometricEnabled = json['biometricEnabled'] as bool? ?? false;
-        _pinThresholdMinutes = json['pinThresholdMinutes'] as int? ?? 5;
-        _applyThemeMode();
-      }
+      _lastVaultPath = await _secureStorage.read(key: _kVaultPathKey);
     } catch (_) {}
 
+    // 2. Vaultフォルダの設定ファイルから本体設定を読み込み
+    final settingsPath = _settingsPath;
+    if (settingsPath != null) {
+      try {
+        final file = File(settingsPath);
+        if (await file.exists()) {
+          final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+          _autoLockMinutes = json['autoLockMinutes'] as int? ?? 5;
+          _passwordExpiryDays = json['passwordExpiryDays'] as int? ?? 90;
+          _themeModeStr = json['themeMode'] as String? ?? 'dark';
+          _autoSyncEnabled = json['autoSyncEnabled'] as bool? ?? true;
+          _realtimeSyncEnabled = json['realtimeSyncEnabled'] as bool? ?? true;
+          _clipboardAutoClear = json['clipboardAutoClear'] as bool? ?? true;
+          _pinEnabled = json['pinEnabled'] as bool? ?? false;
+          _biometricEnabled = json['biometricEnabled'] as bool? ?? false;
+          _pinThresholdMinutes = json['pinThresholdMinutes'] as int? ?? 5;
+
+          // バックエンド種別をロード
+          final backendId = json['syncBackend'] as String? ?? 'gdrive';
+          _backendKind = _parseBackendKind(backendId);
+          _syncManager.setBackend(_currentBackend);
+
+          _applyThemeMode();
+        }
+      } catch (_) {}
+    }
+
+    // 3. 起動時のVault状態判定
     if (_lastVaultPath != null && await File(_lastVaultPath!).exists()) {
       setState(() { _isNewVault = false; _isLoading = false; });
     } else {
-      final exists = await _vaultService.vaultFileExists();
-      setState(() { _isNewVault = !exists; _isLoading = false; });
+      // Vaultが未指定 or ファイルが消えている → 新規作成扱い
+      _lastVaultPath = null;
+      setState(() { _isNewVault = true; _isLoading = false; });
     }
     // 保存済み設定でタイマーを再起動（周期調整のため）
     _startIdleTimer();
   }
 
   Future<void> _saveSettings() async {
+    final settingsPath = _settingsPath;
+    if (settingsPath == null) return; // Vault未指定なら保存先がないのでスキップ
     try {
-      final file = File(await _settingsPath);
+      final file = File(settingsPath);
+      await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode({
-        'lastVaultPath': _lastVaultPath,
         'autoLockMinutes': _autoLockMinutes,
         'passwordExpiryDays': _passwordExpiryDays,
         'themeMode': _themeModeStr,
@@ -265,8 +308,36 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         'pinEnabled': _pinEnabled,
         'biometricEnabled': _biometricEnabled,
         'pinThresholdMinutes': _pinThresholdMinutes,
+        'syncBackend': _backendIdOf(_backendKind),
       }));
     } catch (_) {}
+  }
+
+  /// バックエンドID文字列 ↔ enum の変換
+  static SyncBackendKind _parseBackendKind(String id) {
+    switch (id) {
+      case 'webdav': return SyncBackendKind.webdav;
+      case 'local': return SyncBackendKind.localPath;
+      case 'gdrive':
+      default: return SyncBackendKind.googleDrive;
+    }
+  }
+
+  static String _backendIdOf(SyncBackendKind kind) {
+    switch (kind) {
+      case SyncBackendKind.googleDrive: return 'gdrive';
+      case SyncBackendKind.webdav: return 'webdav';
+      case SyncBackendKind.localPath: return 'local';
+    }
+  }
+
+  /// バックエンド変更時のハンドラ（設定画面から呼ばれる）
+  void _onBackendChanged(SyncBackendKind kind) {
+    setState(() {
+      _backendKind = kind;
+      _syncManager.setBackend(_currentBackend);
+    });
+    _saveSettings();
   }
 
   void _onUnlocked() {
@@ -286,9 +357,14 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     }
   }
 
-  void _onVaultPathChanged(String path) {
+  Future<void> _onVaultPathChanged(String path) async {
     _lastVaultPath = path;
-    _saveSettings();
+    // SecureStorageに永続化（次回起動時にこのVaultを開く）
+    try {
+      await _secureStorage.write(key: _kVaultPathKey, value: path);
+    } catch (_) {}
+    // 新しいVaultフォルダに設定ファイルを作成/更新
+    await _saveSettings();
   }
 
   void _applyThemeMode() {
@@ -316,7 +392,12 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     if (_vaultService.state == VaultState.unlocked && !_quickLocked) {
       return HomeScreen(
         vaultService: _vaultService,
-        driveService: _driveService,
+        backend: _currentBackend,
+        backendKind: _backendKind,
+        googleDriveBackend: _googleDriveBackend,
+        webdavBackend: _webdavBackend,
+        localPathBackend: _localPathBackend,
+        onBackendChanged: _onBackendChanged,
         syncManager: _syncManager,
         onLock: () => setState(() {}),
         onInteraction: resetInteractionTime,

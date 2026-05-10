@@ -1,9 +1,10 @@
 /// Kuraudo 同期マネージャー
 /// 
-/// VaultService と GoogleDriveService を統合し、
+/// VaultService と SyncBackend を統合し、
 /// ローカル・ファースト原則に基づくハイブリッド同期を実現
 /// 
 /// v2.0: パスワード自動取得、スマート同期、バックアップ管理
+/// v3.0: SyncBackend抽象化（Google Drive / WebDAV / ローカルパスを切替可能）
 library;
 
 import 'dart:io';
@@ -12,7 +13,7 @@ import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'vault_service.dart';
-import 'google_drive_service.dart';
+import 'sync_backend.dart';
 import '../core/kuraudo_file.dart';
 import '../models/vault_entry.dart';
 
@@ -32,18 +33,26 @@ class SyncEvent {
 /// 同期マネージャー
 class SyncManager {
   final VaultService vaultService;
-  final GoogleDriveService driveService;
+  /// 現在のバックエンド（実行時に切り替え可能）
+  SyncBackend backend;
   final Connectivity _connectivity = Connectivity();
 
   void Function(SyncEvent)? onSyncEvent;
 
   SyncManager({
     required this.vaultService,
-    required this.driveService,
+    required this.backend,
     this.onSyncEvent,
   });
 
+  /// バックエンドを切り替え（同期方式変更時に呼ばれる）
+  void setBackend(SyncBackend newBackend) {
+    backend = newBackend;
+  }
+
   Future<bool> get isOnline async {
+    // ローカルバックエンドはネット不要なので常にオンライン扱い
+    if (!backend.info.requiresNetwork) return true;
     final result = await _connectivity.checkConnectivity();
     return !result.contains(ConnectivityResult.none);
   }
@@ -53,10 +62,10 @@ class SyncManager {
 
   // ── 自動同期（Vault解錠時に呼ばれる） ──
 
-  /// ActiveVault名をDriveServiceに反映
+  /// ActiveVault名をbackendに反映
   void _syncVaultName() {
     final name = vaultService.vault?.vaultName ?? 'Default';
-    driveService.setVaultName(name);
+    backend.setVaultName(name);
   }
 
   Future<SyncResult?> autoSync() async {
@@ -65,8 +74,8 @@ class SyncManager {
       return null;
     }
 
-    if (!driveService.isSignedIn) {
-      final success = await driveService.silentSignIn();
+    if (!backend.isReady) {
+      final success = await backend.silentConnect();
       if (!success) return null;
     }
 
@@ -81,7 +90,7 @@ class SyncManager {
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: '同期中...'));
 
-    final result = await driveService.smartSync(
+    final result = await backend.smartSync(
       localFileBytes: localBytes,
       localModifiedAt: localModifiedAt,
     );
@@ -100,13 +109,13 @@ class SyncManager {
   // ── 手動アップロード ──
 
   Future<SyncResult> forceUpload() async {
-    if (!driveService.isSignedIn) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     _syncVaultName();
     final localBytes = await _readLocalFile();
     if (localBytes == null) return SyncResult(status: SyncStatus.error, message: 'ローカルファイルが見つかりません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'アップロード中...'));
-    final result = await driveService.uploadAndRecord(localBytes);
+    final result = await backend.uploadAndRecord(localBytes);
     _emit(SyncEvent(status: result.status, message: result.message, action: result.action));
     return result;
   }
@@ -114,7 +123,7 @@ class SyncManager {
   // ── ダウンロード（パスワード不要） ──
 
   Future<SyncResult> forceDownload([String? masterPassword]) async {
-    if (!driveService.isSignedIn) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     _syncVaultName();
 
     final pw = masterPassword ?? _masterPassword;
@@ -122,7 +131,7 @@ class SyncManager {
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'ダウンロード中...'));
 
-    final remoteBytes = await driveService.download();
+    final remoteBytes = await backend.download();
     if (remoteBytes == null) {
       _emit(SyncEvent(status: SyncStatus.error, message: 'クラウドにデータがありません'));
       return SyncResult(status: SyncStatus.error, message: 'クラウドにデータがありません');
@@ -145,14 +154,14 @@ class SyncManager {
   // ── 保存時の自動同期＋自動バックアップ ──
 
   Future<void> onVaultSaved() async {
-    if (!driveService.isSignedIn) return;
+    if (!backend.isReady) return;
     if (!await isOnline) return;
     _syncVaultName();
 
     final localBytes = await _readLocalFile();
     if (localBytes != null) {
       // アップロード
-      await driveService.uploadAndRecord(localBytes);
+      await backend.uploadAndRecord(localBytes);
       // 自動バックアップ（毎回ではなく1日1回程度）
       await _autoBackupIfNeeded(localBytes);
     }
@@ -161,16 +170,16 @@ class SyncManager {
   /// 1日1回の自動バックアップ（クラウド＋ローカル、各3世代保持）
   Future<void> _autoBackupIfNeeded(Uint8List fileBytes) async {
     try {
-      final backups = await driveService.listBackups();
-      final autoBackups = backups.where((f) => f.name?.contains('auto_') ?? false).toList();
+      final backups = await backend.listBackups();
+      final autoBackups = backups.where((f) => f.name.contains('auto_')).toList();
       if (autoBackups.isNotEmpty) {
-        final latest = autoBackups.first.modifiedTime;
+        final latest = autoBackups.first.modifiedAt;
         if (latest != null && DateTime.now().difference(latest).inHours < 24) {
           return; // 24時間以内にバックアップ済み
         }
       }
       // クラウド自動バックアップ
-      await driveService.createBackup(fileBytes, label: 'auto');
+      await backend.createBackup(fileBytes, label: 'auto');
       // ローカル自動バックアップ（手動とは別世代管理）
       await _createLocalBackup(fileBytes, label: 'auto');
     } catch (_) {}
@@ -179,7 +188,7 @@ class SyncManager {
   // ── マージ同期（パスワード自動取得） ──
 
   Future<SyncResult> mergeSync([String? masterPassword]) async {
-    if (!driveService.isSignedIn) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     if (vaultService.state != VaultState.unlocked || vaultService.vault == null) {
       return SyncResult(status: SyncStatus.error, message: 'Vaultがアンロックされていません');
     }
@@ -190,11 +199,11 @@ class SyncManager {
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'マージ同期中...'));
 
-    final remoteBytes = await driveService.download();
+    final remoteBytes = await backend.download();
     if (remoteBytes == null) {
       _emit(SyncEvent(status: SyncStatus.syncing, message: 'クラウドにデータなし、アップロード中...'));
       final localBytes = await _readLocalFile();
-      if (localBytes != null) await driveService.uploadAndRecord(localBytes);
+      if (localBytes != null) await backend.uploadAndRecord(localBytes);
       _emit(SyncEvent(status: SyncStatus.success, message: 'ローカルデータをアップロードしました', action: SyncAction.uploaded));
       return SyncResult(status: SyncStatus.success, message: 'ローカルデータをアップロードしました', action: SyncAction.uploaded);
     }
@@ -209,7 +218,7 @@ class SyncManager {
       // マージ後は常にアップロード
       await vaultService.save();
       final localBytes = await _readLocalFile();
-      if (localBytes != null) await driveService.uploadAndRecord(localBytes);
+      if (localBytes != null) await backend.uploadAndRecord(localBytes);
 
       final msg = result.hasChanges ? 'マージ完了: $result' : '同期済み（変更なし）';
       _emit(SyncEvent(status: SyncStatus.success, message: msg, action: result.hasChanges ? SyncAction.downloaded : SyncAction.none));
@@ -233,8 +242,8 @@ class SyncManager {
 
     // クラウドバックアップ（サインイン済みの場合のみ）
     String cloudMsg = '';
-    if (driveService.isSignedIn) {
-      final cloudResult = await driveService.createBackup(localBytes, label: 'manual');
+    if (backend.isReady) {
+      final cloudResult = await backend.createBackup(localBytes, label: 'manual');
       cloudMsg = '\nクラウド: ${cloudResult.message}';
     }
 
@@ -329,13 +338,13 @@ class SyncManager {
 
   /// クラウドバックアップからリストア
   Future<SyncResult> restoreFromCloudBackup(String fileId) async {
-    if (!driveService.isSignedIn) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     final pw = _masterPassword;
     if (pw == null) return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'クラウドバックアップからリストア中...'));
     try {
-      final backupBytes = await driveService.downloadBackup(fileId);
+      final backupBytes = await backend.downloadBackup(fileId);
       if (backupBytes == null) return SyncResult(status: SyncStatus.error, message: 'ダウンロード失敗');
       final filePath = vaultService.filePath ?? await vaultService.defaultFilePath;
       await File(filePath).writeAsBytes(backupBytes);

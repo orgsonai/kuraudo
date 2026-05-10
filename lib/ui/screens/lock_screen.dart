@@ -209,20 +209,26 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
       }
     }
 
+    // パス未指定時は明示的にエラー（OS既定領域への保存を防ぐ）
+    final path = _pathController.text.trim().isNotEmpty ? _pathController.text.trim() : null;
+    if (path == null) {
+      setState(() => _errorMessage = widget.isNewVault
+          ? 'Vault の保存先を指定してください（フォルダアイコンから選択できます）'
+          : 'Vault ファイルを指定してください（フォルダアイコンから選択できます）');
+      return;
+    }
+
     setState(() { _isLoading = true; _errorMessage = null; });
 
     try {
-      final path = _pathController.text.trim().isNotEmpty ? _pathController.text.trim() : null;
-
       if (widget.isNewVault) {
         await widget.vaultService.createVault(password, filePath: path);
       } else {
         await widget.vaultService.unlock(password, filePath: path);
       }
 
-      // パスを保存
-      final usedPath = path ?? await widget.vaultService.defaultFilePath;
-      widget.onVaultPathChanged(usedPath);
+      // パスを保存（必ずユーザー指定パスを使う）
+      widget.onVaultPathChanged(path);
       widget.onUnlocked();
     } catch (e) {
       setState(() {

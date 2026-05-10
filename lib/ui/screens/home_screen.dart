@@ -11,6 +11,9 @@ import 'package:uuid/uuid.dart';
 import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
 import '../../services/google_drive_service.dart';
+import '../../services/sync_backend.dart';
+import '../../services/local_path_backend.dart';
+import '../../services/webdav_backend.dart';
 import '../../services/sync_manager.dart';
 import '../../services/autofill_service.dart';
 import '../../core/password_generator.dart';
@@ -24,7 +27,12 @@ import 'sync_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VaultService vaultService;
-  final GoogleDriveService driveService;
+  final SyncBackend backend;
+  final SyncBackendKind backendKind;
+  final GoogleDriveService googleDriveBackend;
+  final WebDAVBackend webdavBackend;
+  final LocalPathBackend localPathBackend;
+  final void Function(SyncBackendKind) onBackendChanged;
   final SyncManager syncManager;
   final VoidCallback onLock;
   final VoidCallback? onInteraction;
@@ -49,7 +57,7 @@ class HomeScreen extends StatefulWidget {
   final void Function(bool) onBiometricEnabledChanged;
   final void Function(int) onPinThresholdChanged;
   final dynamic secureStorage; // FlutterSecureStorage
-  const HomeScreen({super.key, required this.vaultService, required this.driveService, required this.syncManager, required this.onLock, this.onInteraction, this.autoLockMinutes = 5, this.passwordExpiryDays = 90, required this.onAutoLockChanged, required this.onPasswordExpiryChanged, this.themeMode = 'dark', required this.onThemeModeChanged, this.autoSyncEnabled = true, this.realtimeSyncEnabled = true, required this.onAutoSyncChanged, required this.onRealtimeSyncChanged, this.clipboardAutoClear = true, required this.onClipboardAutoClearChanged, this.pinEnabled = false, this.biometricEnabled = false, this.pinThresholdMinutes = 5, required this.onPinEnabledChanged, required this.onBiometricEnabledChanged, required this.onPinThresholdChanged, this.secureStorage});
+  const HomeScreen({super.key, required this.vaultService, required this.backend, required this.backendKind, required this.googleDriveBackend, required this.webdavBackend, required this.localPathBackend, required this.onBackendChanged, required this.syncManager, required this.onLock, this.onInteraction, this.autoLockMinutes = 5, this.passwordExpiryDays = 90, required this.onAutoLockChanged, required this.onPasswordExpiryChanged, this.themeMode = 'dark', required this.onThemeModeChanged, this.autoSyncEnabled = true, this.realtimeSyncEnabled = true, required this.onAutoSyncChanged, required this.onRealtimeSyncChanged, this.clipboardAutoClear = true, required this.onClipboardAutoClearChanged, this.pinEnabled = false, this.biometricEnabled = false, this.pinThresholdMinutes = 5, required this.onPinEnabledChanged, required this.onBiometricEnabledChanged, required this.onPinThresholdChanged, this.secureStorage});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -191,9 +199,53 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showStatus(String msg) { _statusMessage = msg; setState(() {}); Future.delayed(const Duration(seconds: 4), () { if (mounted && _statusMessage == msg) setState(() => _statusMessage = ''); }); }
 
-  Future<String> get _statePath async { final d = await getApplicationDocumentsDirectory(); return '${d.path}/kuraudo_ui_state.json'; }
-  Future<void> _loadUIState() async { try { final f = File(await _statePath); if (await f.exists()) { final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>; _selectedCategory = j['selectedCategory'] as String?; _showFavoritesOnly = j['showFavoritesOnly'] as bool? ?? false; _sortMode = _SortMode.values[j['sortMode'] as int? ?? 5]; _markDirty(); setState(() {}); } } catch (_) {} }
-  Future<void> _saveUIState() async { try { final f = File(await _statePath); await f.writeAsString(jsonEncode({'selectedCategory': _selectedCategory, 'showFavoritesOnly': _showFavoritesOnly, 'sortMode': _sortMode.index})); } catch (_) {} }
+  /// UI状態ファイルのパス（Vaultと同じフォルダに置く、OS既定領域は使わない）
+  Future<String?> get _statePath async {
+    final vaultPath = widget.vaultService.filePath;
+    if (vaultPath == null) return null;
+    final dir = File(vaultPath).parent.path;
+    return '$dir${Platform.pathSeparator}kuraudo_ui_state.json';
+  }
+  Future<void> _loadUIState() async {
+    try {
+      final p = await _statePath;
+      if (p == null) return;
+      final f = File(p);
+      if (await f.exists()) {
+        final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+        _selectedCategory = j['selectedCategory'] as String?;
+        _showFavoritesOnly = j['showFavoritesOnly'] as bool? ?? false;
+        _sortMode = _SortMode.values[j['sortMode'] as int? ?? 5];
+        _markDirty();
+        setState(() {});
+        return;
+      }
+      // 旧形式（ドキュメントフォルダ）からのマイグレーション
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final oldFile = File('${dir.path}/kuraudo_ui_state.json');
+        if (await oldFile.exists()) {
+          final j = jsonDecode(await oldFile.readAsString()) as Map<String, dynamic>;
+          _selectedCategory = j['selectedCategory'] as String?;
+          _showFavoritesOnly = j['showFavoritesOnly'] as bool? ?? false;
+          _sortMode = _SortMode.values[j['sortMode'] as int? ?? 5];
+          _markDirty();
+          setState(() {});
+          await _saveUIState();      // 新フォルダに書き直し
+          await oldFile.delete();    // 旧ファイル削除
+        }
+      } catch (_) {}
+    } catch (_) {}
+  }
+  Future<void> _saveUIState() async {
+    try {
+      final p = await _statePath;
+      if (p == null) return;
+      final f = File(p);
+      await f.parent.create(recursive: true);
+      await f.writeAsString(jsonEncode({'selectedCategory': _selectedCategory, 'showFavoritesOnly': _showFavoritesOnly, 'sortMode': _sortMode.index}));
+    } catch (_) {}
+  }
 
   void _setCategory(String? c) { _selectedCategory = c; _showTrash = false; _focusedIndex = -1; _markDirty(); setState(() {}); _saveUIState(); }
   void _setSort(_SortMode m) { _sortMode = m; _focusedIndex = -1; _markDirty(); setState(() {}); _saveUIState(); }
@@ -380,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final pos = button.localToGlobal(Offset.zero, ancestor: overlay);
     final rect = RelativeRect.fromLTRB(pos.dx, pos.dy + button.size.height, overlay.size.width - pos.dx - button.size.width, 0);
     showMenu<String>(context: ctx, position: rect, popUpAnimationStyle: AnimationStyle(duration: Duration.zero), items: <PopupMenuEntry<String>>[
-      const PopupMenuItem(value: 'sync', child: Row(children: [Icon(Icons.cloud_sync_rounded, size: 18), SizedBox(width: 10), Text('クラウド同期')])),
+      const PopupMenuItem(value: 'sync', child: Row(children: [Icon(Icons.cloud_sync_rounded, size: 18), SizedBox(width: 10), Text('同期')])),
       const PopupMenuItem(value: 'accounts', child: Row(children: [Icon(Icons.people_rounded, size: 18), SizedBox(width: 10), Text('アカウント紐付け')])),
       const PopupMenuItem(value: 'import', child: Row(children: [Icon(Icons.upload_rounded, size: 18), SizedBox(width: 10), Text('インポート')])),
       const PopupMenuDivider(),
@@ -389,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(value: 'expired', child: Row(children: [Icon(Icons.schedule_rounded, size: 18), SizedBox(width: 10), Text('期限切れパスワード')])),
       const PopupMenuDivider(),
       const PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings_rounded, size: 18), SizedBox(width: 10), Text('設定')])),
-    ]).then((v) { if (v == null) return; switch(v) { case 'sync': Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(vaultService: widget.vaultService, driveService: widget.driveService, syncManager: widget.syncManager))).then((_) => _refresh()); case 'accounts': Navigator.push(context, MaterialPageRoute(builder: (_) => AccountLinkScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'import': Navigator.push(context, MaterialPageRoute(builder: (_) => ImportScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'settings': Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(vaultService: widget.vaultService, autoLockMinutes: widget.autoLockMinutes, passwordExpiryDays: widget.passwordExpiryDays, onAutoLockChanged: widget.onAutoLockChanged, onPasswordExpiryChanged: widget.onPasswordExpiryChanged, themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged, autoSyncEnabled: widget.autoSyncEnabled, realtimeSyncEnabled: widget.realtimeSyncEnabled, onAutoSyncChanged: widget.onAutoSyncChanged, onRealtimeSyncChanged: widget.onRealtimeSyncChanged, clipboardAutoClear: widget.clipboardAutoClear, onClipboardAutoClearChanged: widget.onClipboardAutoClearChanged, pinEnabled: widget.pinEnabled, biometricEnabled: widget.biometricEnabled, pinThresholdMinutes: widget.pinThresholdMinutes, onPinEnabledChanged: widget.onPinEnabledChanged, onBiometricEnabledChanged: widget.onBiometricEnabledChanged, onPinThresholdChanged: widget.onPinThresholdChanged, secureStorage: widget.secureStorage))); case 'weak': _showWeakPasswords(); case 'duplicate': _showDuplicatePasswords(); case 'expired': _showExpiredPasswords(); } });
+    ]).then((v) { if (v == null) return; switch(v) { case 'sync': Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(vaultService: widget.vaultService, backend: widget.backend, backendKind: widget.backendKind, googleDriveBackend: widget.googleDriveBackend, webdavBackend: widget.webdavBackend, localPathBackend: widget.localPathBackend, onBackendChanged: widget.onBackendChanged, syncManager: widget.syncManager))).then((_) => _refresh()); case 'accounts': Navigator.push(context, MaterialPageRoute(builder: (_) => AccountLinkScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'import': Navigator.push(context, MaterialPageRoute(builder: (_) => ImportScreen(vaultService: widget.vaultService))).then((_) => _refresh()); case 'settings': Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(vaultService: widget.vaultService, autoLockMinutes: widget.autoLockMinutes, passwordExpiryDays: widget.passwordExpiryDays, onAutoLockChanged: widget.onAutoLockChanged, onPasswordExpiryChanged: widget.onPasswordExpiryChanged, themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged, autoSyncEnabled: widget.autoSyncEnabled, realtimeSyncEnabled: widget.realtimeSyncEnabled, onAutoSyncChanged: widget.onAutoSyncChanged, onRealtimeSyncChanged: widget.onRealtimeSyncChanged, clipboardAutoClear: widget.clipboardAutoClear, onClipboardAutoClearChanged: widget.onClipboardAutoClearChanged, pinEnabled: widget.pinEnabled, biometricEnabled: widget.biometricEnabled, pinThresholdMinutes: widget.pinThresholdMinutes, onPinEnabledChanged: widget.onPinEnabledChanged, onBiometricEnabledChanged: widget.onBiometricEnabledChanged, onPinThresholdChanged: widget.onPinThresholdChanged, secureStorage: widget.secureStorage))); case 'weak': _showWeakPasswords(); case 'duplicate': _showDuplicatePasswords(); case 'expired': _showExpiredPasswords(); } });
   }
 
   @override

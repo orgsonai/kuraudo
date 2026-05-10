@@ -32,8 +32,9 @@ Kuraudo は個人が開発・維持している無料のオープンソースア
 
 - 暗号化関連コード（`crypto_engine.dart`, `kuraudo_file.dart`）
 - `.kuraudo` ファイルフォーマット
-- Google Drive 同期の認証・通信
+- 同期バックエンドの認証・通信（Google Drive / WebDAV / ローカルパス）
 - パスワード生成器の乱数品質
+- 認証情報の保管（SecureStorage 経由のキーストア利用）
 
 対象外:
 

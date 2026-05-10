@@ -599,8 +599,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // ── クラウド同期 ──
-          _SectionHeader(title: 'クラウド同期'),
+          // ── 同期 ──
+          _SectionHeader(title: '同期'),
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Padding(
@@ -621,7 +621,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
                 Padding(
                   padding: const EdgeInsets.only(left: 32),
-                  child: Text('解錠時の自動同期と保存時の自動アップロードを制御します', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                  child: Text('解錠時の自動同期と保存時の自動アップロードを制御します（同期方式は同期画面の⇄から選択）', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                 ),
                 const SizedBox(height: 8),
                 Row(children: [
@@ -639,7 +639,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
                 Padding(
                   padding: const EdgeInsets.only(left: 32),
-                  child: Text('エントリ保存の度に即座にクラウドにアップロードします\n自動同期がOFFの場合は無効になります', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4)),
+                  child: Text('エントリ保存の度に即座にリモートにアップロードします\n自動同期がOFFの場合は無効になります', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4)),
                 ),
               ]),
             ),
