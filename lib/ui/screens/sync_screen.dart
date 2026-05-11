@@ -46,19 +46,32 @@ class _SyncScreenState extends State<SyncScreen> {
   String? _lastMessage;
   SyncAction? _lastAction;
 
+  /// 現在のバックエンド種別（widgetから初期化、切り替え時にsetStateで更新）
+  late SyncBackendKind _currentKind;
+
+  /// 現在のバックエンド種別に応じた実体を返す（毎回解決）
+  SyncBackend get _currentBackend {
+    switch (_currentKind) {
+      case SyncBackendKind.googleDrive: return widget.googleDriveBackend;
+      case SyncBackendKind.webdav: return widget.webdavBackend;
+      case SyncBackendKind.localPath: return widget.localPathBackend;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _currentKind = widget.backendKind;
     _loadLastSyncTime();
   }
 
   Future<void> _loadLastSyncTime() async {
-    await widget.backend.loadLastSyncTime();
+    await _currentBackend.loadLastSyncTime();
     if (mounted) setState(() {});
   }
 
   String get _lastSyncTimeText {
-    final t = widget.backend.lastSyncTime;
+    final t = _currentBackend.lastSyncTime;
     if (t == null) return '未同期';
     final now = DateTime.now();
     final diff = now.difference(t);
@@ -74,7 +87,7 @@ class _SyncScreenState extends State<SyncScreen> {
     setState(() => _isSyncing = true);
     bool success = false;
     String message = '';
-    switch (widget.backendKind) {
+    switch (_currentKind) {
       case SyncBackendKind.googleDrive:
         success = await widget.googleDriveBackend.signIn();
         message = success
@@ -102,7 +115,7 @@ class _SyncScreenState extends State<SyncScreen> {
   Future<void> _disconnect() async {
     final confirm = await _confirmDialog('切断', '現在のバックエンドから切断します。\n認証情報がクリアされます。実行しますか？', isDangerous: true);
     if (confirm != true) return;
-    await widget.backend.disconnect();
+    await _currentBackend.disconnect();
     setState(() {
       _lastMessage = '切断しました';
       _lastAction = null;
@@ -195,30 +208,39 @@ class _SyncScreenState extends State<SyncScreen> {
             kind: SyncBackendKind.googleDrive,
             label: 'Google Drive',
             description: 'Googleアカウントでクラウド同期',
-            isSelected: widget.backendKind == SyncBackendKind.googleDrive,
+            isSelected: _currentKind == SyncBackendKind.googleDrive,
             onTap: () => Navigator.pop(ctx, SyncBackendKind.googleDrive),
           ),
           _BackendOption(
             kind: SyncBackendKind.webdav,
             label: 'WebDAV',
             description: 'Nextcloud / Synology / 自前サーバー',
-            isSelected: widget.backendKind == SyncBackendKind.webdav,
+            isSelected: _currentKind == SyncBackendKind.webdav,
             onTap: () => Navigator.pop(ctx, SyncBackendKind.webdav),
           ),
           _BackendOption(
             kind: SyncBackendKind.localPath,
             label: 'ローカルパス',
             description: 'SMBマウント先 / 外付けドライブ / 共有フォルダ',
-            isSelected: widget.backendKind == SyncBackendKind.localPath,
+            isSelected: _currentKind == SyncBackendKind.localPath,
             onTap: () => Navigator.pop(ctx, SyncBackendKind.localPath),
           ),
         ],
       ),
     );
-    if (selected != null && selected != widget.backendKind) {
+    if (selected != null && selected != _currentKind) {
+      // 親に通知（main.dartで永続化＆SyncManagerに反映）
       widget.onBackendChanged(selected);
-      // 新しいバックエンドの状態反映のため画面再構築
-      if (mounted) Navigator.pop(context, true);
+      // 同期画面内のState更新（画面に留まり、新バックエンドの状態を表示）
+      if (mounted) {
+        setState(() {
+          _currentKind = selected;
+          _lastMessage = null;
+          _lastAction = null;
+        });
+        // 切り替え先の最終同期時刻を読み込み
+        _loadLastSyncTime();
+      }
     }
   }
 
@@ -284,7 +306,7 @@ class _SyncScreenState extends State<SyncScreen> {
     if (!mounted) return;
 
     final cs = Theme.of(context).colorScheme;
-    final cloudBackups = widget.backend.isReady ? await widget.backend.listBackups() : <SyncBackupEntry>[];
+    final cloudBackups = _currentBackend.isReady ? await _currentBackend.listBackups() : <SyncBackupEntry>[];
 
     if (!mounted) return;
 
@@ -355,23 +377,23 @@ class _SyncScreenState extends State<SyncScreen> {
   // ── ステータス色/アイコン ──
 
   Color _statusColor() {
-    if (widget.backend.status == SyncStatus.error) return KuraudoTheme.danger;
-    if (widget.backend.status == SyncStatus.success) return KuraudoTheme.accent;
+    if (_currentBackend.status == SyncStatus.error) return KuraudoTheme.danger;
+    if (_currentBackend.status == SyncStatus.success) return KuraudoTheme.accent;
     return Theme.of(context).colorScheme.onSurfaceVariant;
   }
 
   IconData _statusIcon() {
-    if (widget.backend.status == SyncStatus.error) return Icons.error_rounded;
-    if (widget.backend.status == SyncStatus.success) return Icons.check_circle_rounded;
-    if (widget.backend.status == SyncStatus.syncing) return Icons.sync_rounded;
+    if (_currentBackend.status == SyncStatus.error) return Icons.error_rounded;
+    if (_currentBackend.status == SyncStatus.success) return Icons.check_circle_rounded;
+    if (_currentBackend.status == SyncStatus.syncing) return Icons.sync_rounded;
     return Icons.info_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isReady = widget.backend.isReady;
-    final info = widget.backend.info;
+    final isReady = _currentBackend.isReady;
+    final info = _currentBackend.info;
 
     return Scaffold(
       appBar: AppBar(
@@ -423,7 +445,7 @@ class _SyncScreenState extends State<SyncScreen> {
                             const SizedBox(height: 2),
                             Text(
                               isReady
-                                  ? widget.backend.displayLabel ?? info.displayName
+                                  ? _currentBackend.displayLabel ?? info.displayName
                                   : _connectHint(info.kind),
                               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                               overflow: TextOverflow.ellipsis,
