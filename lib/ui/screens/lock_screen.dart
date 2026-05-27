@@ -24,6 +24,9 @@ class LockScreen extends StatefulWidget {
   final bool quickLocked;
   final bool pinEnabled;
   final bool biometricEnabled;
+  // H-02: PIN試行回数の永続化（再起動越しの総当たり防止）
+  // 設定画面から任意で有効化できる
+  final bool pinLockoutPersistent;
   final FlutterSecureStorage? secureStorage;
   final VoidCallback? onQuickUnlocked;
   final VoidCallback? onForceFullLock;
@@ -40,6 +43,7 @@ class LockScreen extends StatefulWidget {
     this.quickLocked = false,
     this.pinEnabled = false,
     this.biometricEnabled = false,
+    this.pinLockoutPersistent = false,
     this.secureStorage,
     this.onQuickUnlocked,
     this.onForceFullLock,
@@ -66,6 +70,14 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
   String? _pinError;
   int _pinFailCount = 0;
   static const int _maxPinAttempts = 5;
+  // H-02: 永続化された PIN ロック解除予定時刻（DateTime.parse 可能なISO 8601文字列）
+  // pinLockoutPersistent が true のときのみ SecureStorage に保存される
+  DateTime? _pinLockUntil;
+  // H-02: 永続ロックアウトに使うSecureStorageキー
+  static const String _kPinFailCountKey = 'kuraudo_pin_fail_count';
+  static const String _kPinLockUntilKey = 'kuraudo_pin_lock_until';
+  // 段階的バックオフ（5/10/30/60分）
+  static const List<int> _lockoutMinutes = [5, 10, 30, 60];
   final _localAuth = LocalAuthentication();
 
   late AnimationController _animController;
@@ -84,12 +96,34 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
       _pathController.text = widget.lastVaultPath!;
     }
 
+    // H-02: 永続化されたPIN失敗回数・ロックアウト時刻を復元
+    // この機構は pinLockoutPersistent が true の場合のみ動作
+    if (widget.pinLockoutPersistent) {
+      _loadPersistedPinLockout();
+    }
+
     // quickLocked時に生体認証を自動トリガー
     if (widget.quickLocked && widget.biometricEnabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
     }
 
     _loadAppVersion();
+  }
+
+  /// H-02: SecureStorage から PIN ロックアウト状態を読み込む
+  Future<void> _loadPersistedPinLockout() async {
+    final storage = widget.secureStorage;
+    if (storage == null) return;
+    try {
+      final failStr = await storage.read(key: _kPinFailCountKey);
+      final lockUntilStr = await storage.read(key: _kPinLockUntilKey);
+      if (mounted) {
+        setState(() {
+          _pinFailCount = int.tryParse(failStr ?? '') ?? 0;
+          _pinLockUntil = lockUntilStr != null ? DateTime.tryParse(lockUntilStr) : null;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadAppVersion() async {
@@ -112,7 +146,14 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     if (widget.quickLocked && !oldWidget.quickLocked) {
       _pinInput = '';
       _pinError = null;
-      _pinFailCount = 0;
+      // H-02: 永続化モードでは失敗回数を保持（SecureStorageから再ロード）
+      // 非永続モードでは従来通りメモリ上のカウンタを0に
+      if (widget.pinLockoutPersistent) {
+        _loadPersistedPinLockout();
+      } else {
+        _pinFailCount = 0;
+        _pinLockUntil = null;
+      }
     }
   }
 
@@ -168,13 +209,39 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     }
   }
 
+  /// H-02: PIN ロックアウトの永続化対応
+  ///
+  /// pinLockoutPersistent が true のとき:
+  /// - 失敗回数と「ロック解除予定時刻」を SecureStorage に保存
+  /// - アプリ再起動後もロックアウトが継続する
+  /// - 5回失敗 → 5分/10分/30分/60分の段階的バックオフ
+  ///
+  /// pinLockoutPersistent が false のとき（既定）:
+  /// - 従来通り：5回失敗でマスターパスワード必須に切替（メモリのみ）
   Future<void> _verifyPin() async {
     if (_pinInput.length != 4) return;
     final storage = widget.secureStorage;
     if (storage == null) return;
 
-    // 試行回数超過 → マスターパスワード強制
-    if (_pinFailCount >= _maxPinAttempts) {
+    // 永続化モード: 現在もロックアウト時間中か確認
+    if (widget.pinLockoutPersistent && _pinLockUntil != null) {
+      if (DateTime.now().isBefore(_pinLockUntil!)) {
+        final remainSec = _pinLockUntil!.difference(DateTime.now()).inSeconds;
+        final remainText = remainSec >= 60 ? '${(remainSec / 60).ceil()}分' : '${remainSec}秒';
+        setState(() {
+          _pinError = 'PINロックアウト中です（あと$remainText）';
+          _pinInput = '';
+        });
+        return;
+      } else {
+        // ロックアウト時間が過ぎた → 期限切れフラグをクリア
+        _pinLockUntil = null;
+        try { await storage.delete(key: _kPinLockUntilKey); } catch (_) {}
+      }
+    }
+
+    // 試行回数超過 → マスターパスワード強制（非永続モードの既存挙動）
+    if (!widget.pinLockoutPersistent && _pinFailCount >= _maxPinAttempts) {
       setState(() {
         _pinError = 'PIN試行回数を超えました。マスターパスワードで解除してください';
         _pinInput = '';
@@ -185,21 +252,58 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     try {
       final savedPin = await storage.read(key: 'kuraudo_pin');
       if (savedPin != null && savedPin == _pinInput) {
-        _pinFailCount = 0; // 成功時リセット
+        // 成功 → カウンタ・ロックアウト時刻をクリア
+        _pinFailCount = 0;
+        _pinLockUntil = null;
+        if (widget.pinLockoutPersistent) {
+          try {
+            await storage.delete(key: _kPinFailCountKey);
+            await storage.delete(key: _kPinLockUntilKey);
+          } catch (_) {}
+        }
         widget.onQuickUnlocked?.call();
       } else {
         _pinFailCount++;
-        final remaining = _maxPinAttempts - _pinFailCount;
-        if (remaining <= 0) {
-          setState(() {
-            _pinError = 'PIN試行回数を超えました。マスターパスワードで解除してください';
-            _pinInput = '';
-          });
+        if (widget.pinLockoutPersistent) {
+          // 失敗回数を永続化
+          try {
+            await storage.write(key: _kPinFailCountKey, value: _pinFailCount.toString());
+          } catch (_) {}
+
+          if (_pinFailCount >= _maxPinAttempts) {
+            // 5回失敗ごとに段階的バックオフでロックアウト時間を計算
+            // 5回目→5分, 10回目→10分, 15回目→30分, 20回目以降→60分
+            final stage = ((_pinFailCount - _maxPinAttempts) ~/ _maxPinAttempts).clamp(0, _lockoutMinutes.length - 1);
+            final lockMinutes = _lockoutMinutes[stage];
+            _pinLockUntil = DateTime.now().add(Duration(minutes: lockMinutes));
+            try {
+              await storage.write(key: _kPinLockUntilKey, value: _pinLockUntil!.toIso8601String());
+            } catch (_) {}
+            setState(() {
+              _pinError = 'PINを${_maxPinAttempts}回間違えました。$lockMinutes分間ロックされます';
+              _pinInput = '';
+            });
+          } else {
+            final remaining = _maxPinAttempts - _pinFailCount;
+            setState(() {
+              _pinError = 'PINが正しくありません（残り$remaining回）';
+              _pinInput = '';
+            });
+          }
         } else {
-          setState(() {
-            _pinError = 'PINが正しくありません（残り$remaining回）';
-            _pinInput = '';
-          });
+          // 非永続モード（既存挙動）
+          final remaining = _maxPinAttempts - _pinFailCount;
+          if (remaining <= 0) {
+            setState(() {
+              _pinError = 'PIN試行回数を超えました。マスターパスワードで解除してください';
+              _pinInput = '';
+            });
+          } else {
+            setState(() {
+              _pinError = 'PINが正しくありません（残り$remaining回）';
+              _pinInput = '';
+            });
+          }
         }
       }
     } catch (_) {
@@ -239,6 +343,16 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
         await widget.vaultService.createVault(password, filePath: path);
       } else {
         await widget.vaultService.unlock(password, filePath: path);
+      }
+
+      // H-02: マスターパスワードで解除成功 → 永続化されたPIN失敗カウンタもクリア
+      if (widget.pinLockoutPersistent && widget.secureStorage != null) {
+        try {
+          await widget.secureStorage!.delete(key: _kPinFailCountKey);
+          await widget.secureStorage!.delete(key: _kPinLockUntilKey);
+        } catch (_) {}
+        _pinFailCount = 0;
+        _pinLockUntil = null;
       }
 
       // パスを保存（必ずユーザー指定パスを使う）

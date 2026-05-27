@@ -175,12 +175,62 @@ class _SyncScreenState extends State<SyncScreen> {
     );
     if (result != true) return false;
 
-    return await widget.webdavBackend.configure(
-      serverUrl: urlCtrl.text.trim(),
-      username: userCtrl.text.trim(),
-      password: passCtrl.text,
-      remotePath: pathCtrl.text.trim().isEmpty ? null : pathCtrl.text.trim(),
-    );
+    // H-03: HTTP接続はユーザーの明示的同意が必要
+    try {
+      return await widget.webdavBackend.configure(
+        serverUrl: urlCtrl.text.trim(),
+        username: userCtrl.text.trim(),
+        password: passCtrl.text,
+        remotePath: pathCtrl.text.trim().isEmpty ? null : pathCtrl.text.trim(),
+      );
+    } on WebDAVHttpNotAllowedException catch (_) {
+      // HTTPS でない → 警告ダイアログを表示
+      if (!mounted) return false;
+      final agreed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.warning_amber_rounded, size: 32, color: Colors.orange),
+          title: const Text('HTTP接続は安全ではありません'),
+          content: const Text(
+            'HTTP（暗号化なし）での接続を選択しました。\n\n'
+            '• ユーザー名とパスワードが平文で送信されます\n'
+            '• 同一ネットワーク上の第三者に傍受される可能性があります\n'
+            '• Vault本体はAES-256で暗号化されていますが、'
+            'WebDAVの認証情報そのものは保護されません\n\n'
+            '可能であれば HTTPS のURLに変更することを強く推奨します。\n'
+            'それでも続行しますか？',
+            style: TextStyle(fontSize: 13, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('リスクを承知で続行', style: TextStyle(color: Colors.orange)),
+            ),
+          ],
+        ),
+      );
+      if (agreed != true) return false;
+      // 同意後に再試行（allowInsecureHttp: true）
+      return await widget.webdavBackend.configure(
+        serverUrl: urlCtrl.text.trim(),
+        username: userCtrl.text.trim(),
+        password: passCtrl.text,
+        remotePath: pathCtrl.text.trim().isEmpty ? null : pathCtrl.text.trim(),
+        allowInsecureHttp: true,
+      );
+    } on ArgumentError catch (e) {
+      // 不正なURLスキーマ
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('URL エラー: ${e.message}')),
+        );
+      }
+      return false;
+    }
   }
 
   /// ローカルパス設定ダイアログ（ディレクトリ選択）

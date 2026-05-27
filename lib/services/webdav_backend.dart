@@ -20,6 +20,18 @@ import 'package:webdav_client/webdav_client.dart' as webdav;
 
 import 'sync_backend.dart';
 
+/// H-03: HTTPS でない URL が設定されようとした場合に投げる例外
+///
+/// UI 側でこの例外をキャッチして「HTTPは安全ではありません。それでも続行しますか？」
+/// と確認ダイアログを表示し、明示的同意が得られた場合のみ
+/// `configure(..., allowInsecureHttp: true)` で再呼び出しすることで HTTP 接続を許可する。
+class WebDAVHttpNotAllowedException implements Exception {
+  final String message;
+  WebDAVHttpNotAllowedException([this.message = 'HTTPSではないURLが指定されました']);
+  @override
+  String toString() => 'WebDAVHttpNotAllowedException: $message';
+}
+
 /// WebDAV同期バックエンド
 class WebDAVBackend implements SyncBackend {
   static const _secureStorage = FlutterSecureStorage();
@@ -94,14 +106,43 @@ class WebDAVBackend implements SyncBackend {
   // ── 設定 ──
 
   /// WebDAV接続情報を設定（永続化される）
+  ///
+  /// [serverUrl] WebDAVサーバーURL（HTTPS推奨）
+  /// [username] ユーザー名
+  /// [password] パスワード
+  /// [remotePath] リモートパス（省略時 `/Kuraudo/`）
+  /// [allowInsecureHttp] H-03セキュリティ修正: `http://` を許可するか
+  ///   - false（既定）: `http://` URLは [WebDAVHttpNotAllowedException] を投げる
+  ///   - true: 警告ダイアログでユーザーが明示同意した後にUI側から渡す
+  ///
   /// 戻り値: 接続テスト結果（true=成功）
+  ///
+  /// 例外:
+  /// - [WebDAVHttpNotAllowedException]: `http://` かつ allowInsecureHttp=false
+  /// - [ArgumentError]: URLスキーマが http/https 以外
   Future<bool> configure({
     required String serverUrl,
     required String username,
     required String password,
     String? remotePath,
+    bool allowInsecureHttp = false,
   }) async {
-    final url = serverUrl.endsWith('/') ? serverUrl : '$serverUrl/';
+    // H-03: URL スキーマ検証
+    final trimmed = serverUrl.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      throw ArgumentError(
+        'サーバーURLは https:// または http:// で始まる必要があります',
+      );
+    }
+    if (uri.scheme == 'http' && !allowInsecureHttp) {
+      throw WebDAVHttpNotAllowedException(
+        'HTTPでの接続は認証情報が平文で送信されるため安全ではありません。'
+        'HTTPSの使用を推奨します。',
+      );
+    }
+
+    final url = trimmed.endsWith('/') ? trimmed : '$trimmed/';
     final path = remotePath ?? _defaultRemotePath;
 
     final client = webdav.newClient(

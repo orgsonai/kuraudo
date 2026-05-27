@@ -39,6 +39,9 @@ class SettingsScreen extends StatefulWidget {
   final void Function(bool) onPinEnabledChanged;
   final void Function(bool) onBiometricEnabledChanged;
   final void Function(int) onPinThresholdChanged;
+  // H-02: PIN試行回数を永続化するか（任意適用）
+  final bool pinLockoutPersistent;
+  final void Function(bool) onPinLockoutPersistentChanged;
   final FlutterSecureStorage? secureStorage;
 
   const SettingsScreen({
@@ -62,6 +65,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onPinEnabledChanged,
     required this.onBiometricEnabledChanged,
     required this.onPinThresholdChanged,
+    this.pinLockoutPersistent = false,
+    required this.onPinLockoutPersistentChanged,
     this.secureStorage,
   });
 
@@ -81,6 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _pinEnabled;
   late bool _biometricEnabled;
   late int _pinThresholdMinutes;
+  late bool _pinLockoutPersistent; // H-02
   bool _biometricAvailable = false;
 
   String _appVersion = '';
@@ -97,6 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _pinEnabled = widget.pinEnabled;
     _biometricEnabled = widget.biometricEnabled;
     _pinThresholdMinutes = widget.pinThresholdMinutes;
+    _pinLockoutPersistent = widget.pinLockoutPersistent;
     _checkBiometric();
     _loadAppVersion();
   }
@@ -200,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _changePassword() async {
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (ctx) => const _ChangePasswordDialog(),
+      builder: (ctx) => _ChangePasswordDialog(vaultService: widget.vaultService),
     );
 
     if (result == null) return;
@@ -575,6 +582,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: const Text('PINを変更', style: TextStyle(fontSize: 12)),
                     ),
                   ),
+                  // H-02: PIN ロックアウトの永続化（任意適用）
+                  const Divider(height: 20),
+                  Row(children: [
+                    const Icon(Icons.shield_outlined, size: 20),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('PINロックアウトを永続化', style: TextStyle(fontSize: 14)),
+                          SizedBox(height: 2),
+                          Text(
+                            'アプリ再起動越しに試行回数を保持',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _pinLockoutPersistent,
+                      activeColor: KuraudoTheme.accent,
+                      onChanged: (v) async {
+                        // OFFに切り替えるとき: 既存の永続データをクリーンアップ
+                        if (!v && widget.secureStorage != null) {
+                          try {
+                            await widget.secureStorage!.delete(key: 'kuraudo_pin_fail_count');
+                            await widget.secureStorage!.delete(key: 'kuraudo_pin_lock_until');
+                          } catch (_) {}
+                        }
+                        setState(() => _pinLockoutPersistent = v);
+                        widget.onPinLockoutPersistentChanged(v);
+                      },
+                    ),
+                  ]),
+                  Text(
+                    'ONにすると 5回失敗で5分→10分→30分→60分の段階的バックオフ。\n'
+                    '再起動しても試行回数がリセットされません。\n'
+                    'OFF（既定）: 5回失敗するとマスターパスワード入力に切替',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
+                  ),
+                  if (_pinLockoutPersistent) ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('カウンタをリセット'),
+                              content: const Text(
+                                '永続化されたPIN失敗カウンタとロックアウト時刻をクリアします。',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('リセット')),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && widget.secureStorage != null) {
+                            try {
+                              await widget.secureStorage!.delete(key: 'kuraudo_pin_fail_count');
+                              await widget.secureStorage!.delete(key: 'kuraudo_pin_lock_until');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('PIN失敗カウンタをリセットしました')),
+                                );
+                              }
+                            } catch (_) {}
+                          }
+                        },
+                        icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                        label: const Text('失敗カウンタをリセット', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ],
                 ],
               ]),
             ),
@@ -863,81 +947,134 @@ class _SettingsTile extends StatelessWidget {
 }
 
 /// パスワード変更ダイアログ
+///
+/// H-01 セキュリティ修正: マスターパスワード変更時に現在のパスワードを必須化。
+/// アンロック放置時に第三者がマスターパスワードを書き換えるのを防止する。
 class _ChangePasswordDialog extends StatefulWidget {
-  const _ChangePasswordDialog();
+  final VaultService vaultService;
+  const _ChangePasswordDialog({required this.vaultService});
 
   @override
   State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
 }
 
 class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  bool _obscure = true;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
   String? _error;
 
   @override
   void dispose() {
+    _currentCtrl.dispose();
     _newCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
   }
 
   void _submit() {
+    // 1. 現在のパスワードを検証（VaultServiceがメモリ上の鍵で照合）
+    if (_currentCtrl.text.isEmpty) {
+      setState(() => _error = '現在のパスワードを入力してください');
+      return;
+    }
+    if (!widget.vaultService.verifyMasterPassword(_currentCtrl.text)) {
+      setState(() => _error = '現在のパスワードが正しくありません');
+      return;
+    }
+    // 2. 新パスワードのバリデーション
     if (_newCtrl.text.length < 8) {
-      setState(() => _error = 'パスワードは8文字以上必要です');
+      setState(() => _error = '新しいパスワードは8文字以上必要です');
+      return;
+    }
+    if (_newCtrl.text == _currentCtrl.text) {
+      setState(() => _error = '新しいパスワードは現在のものと異なる必要があります');
       return;
     }
     if (_newCtrl.text != _confirmCtrl.text) {
-      setState(() => _error = 'パスワードが一致しません');
+      setState(() => _error = '新しいパスワードが一致しません');
       return;
     }
-    Navigator.pop(context, {'new': _newCtrl.text});
+    Navigator.pop(context, {
+      'current': _currentCtrl.text,
+      'new': _newCtrl.text,
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('マスターパスワードを変更'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _newCtrl,
-            obscureText: _obscure,
-            decoration: InputDecoration(
-              labelText: '新しいパスワード',
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_off_rounded
-                      : Icons.visibility_rounded,
-                  size: 18,
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 現在のパスワード
+            TextField(
+              controller: _currentCtrl,
+              obscureText: _obscureCurrent,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: '現在のパスワード',
+                prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureCurrent
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    size: 18,
+                  ),
+                  onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                 ),
-                onPressed: () => setState(() => _obscure = !_obscure),
               ),
+              textInputAction: TextInputAction.next,
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _confirmCtrl,
-            obscureText: _obscure,
-            decoration: const InputDecoration(
-              labelText: 'パスワード確認',
-            ),
-            onSubmitted: (_) => _submit(),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: const TextStyle(
-                fontSize: 12,
-                color: KuraudoTheme.danger,
+            const SizedBox(height: 12),
+            // 新しいパスワード
+            TextField(
+              controller: _newCtrl,
+              obscureText: _obscureNew,
+              decoration: InputDecoration(
+                labelText: '新しいパスワード',
+                prefixIcon: const Icon(Icons.key_rounded, size: 18),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureNew
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    size: 18,
+                  ),
+                  onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                ),
               ),
+              textInputAction: TextInputAction.next,
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmCtrl,
+              obscureText: _obscureNew,
+              decoration: const InputDecoration(
+                labelText: '新しいパスワード（確認）',
+                prefixIcon: Icon(Icons.key_rounded, size: 18),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: KuraudoTheme.danger,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(

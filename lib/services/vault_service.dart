@@ -127,10 +127,18 @@ class VaultService {
     _cachedKey = null;
     _cachedSalt = null;
     _state = VaultState.locked;
+    // M-04: ロック発動時のコールバック（autofillキャッシュクリア等）
+    onLocked?.call();
   }
 
   /// 保存後に呼ばれるコールバック（同期用）
   void Function()? onSaved;
+
+  /// M-04: ロック発動時に呼ばれるコールバック
+  ///
+  /// Android Autofill のネイティブキャッシュクリア等、
+  /// 平文データのメモリ常駐を最小化するための後処理に使用。
+  void Function()? onLocked;
 
   /// Vaultを保存
   Future<void> save() async {
@@ -267,6 +275,18 @@ class VaultService {
   List<VaultEntry> get trashedEntries {
     _ensureUnlocked();
     return _vault!.trashedEntries;
+  }
+
+  /// 現在のマスターパスワードが正しいか検証
+  ///
+  /// アンロック状態でメモリ上に保持されているパスワードと比較する。
+  /// 鍵派生（Argon2id）を再実行しないため高速。
+  /// パスワード変更ダイアログ等の権限確認に使用する。
+  bool verifyMasterPassword(String candidate) {
+    if (_state != VaultState.unlocked || _masterPassword == null) {
+      return false;
+    }
+    return _masterPassword == candidate;
   }
 
   /// マスターパスワードを変更

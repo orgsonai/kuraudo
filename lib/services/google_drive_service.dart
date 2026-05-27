@@ -8,6 +8,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -255,10 +256,20 @@ class GoogleDriveService implements SyncBackend {
   }
 
   /// デスクトップ: HTTPベースOAuth2認証（ブラウザ→localhostリダイレクト）
+  ///
+  /// M-03 セキュリティ修正: CSRF 防止のため state パラメータを生成・検証する。
+  /// state は 128bit のランダムnonce で、認証URL に付与し、リダイレクト時に
+  /// 一致しなければ認証失敗扱いとする。これにより別タブや悪意あるページからの
+  /// 偽の認証コード送り込みを防ぐ（RFC 6749 §10.12）。
   Future<bool> _signInDesktop() async {
     try {
       final scope = _useAppDataFolder ? _appDataScope : _fileScope;
       final redirectUri = 'http://localhost:$_redirectPort';
+
+      // M-03: CSRF防止用の state nonce を生成（128bit のランダム値）
+      final stateNonce = base64Url.encode(
+        List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+      );
 
       // ローカルHTTPサーバー起動
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, _redirectPort);
@@ -271,29 +282,55 @@ class GoogleDriveService implements SyncBackend {
         'scope': '$scope email',
         'access_type': 'offline',
         'prompt': 'consent',
+        'state': stateNonce, // M-03: CSRF防止
       });
 
       await launchUrl(authUrl, mode: LaunchMode.externalApplication);
 
       // リダイレクト待ち（120秒タイムアウト）
       String? authCode;
+      bool stateMismatch = false;
       try {
         final request = await server.first.timeout(const Duration(seconds: 120));
-        authCode = request.uri.queryParameters['code'];
+        final receivedState = request.uri.queryParameters['state'];
+        final receivedCode = request.uri.queryParameters['code'];
 
-        // ブラウザに成功画面を返す
-        request.response
-          ..statusCode = 200
-          ..headers.contentType = ContentType.html
-          ..write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0b;color:#e4e4e7;">'
-              '<h2 style="color:#22c55e;">&#x2705; 認証成功</h2>'
-              '<p>Kuraudoに戻ってください。このタブは閉じて構いません。</p>'
-              '</body></html>');
-        await request.response.close();
+        // M-03: state パラメータの検証
+        // - 受信した state が送信したものと一致しない → CSRF の可能性 → 拒否
+        // - state が無い場合も拒否（Googleのサーバーは必ず返してくる）
+        if (receivedState == null || receivedState != stateNonce) {
+          stateMismatch = true;
+          request.response
+            ..statusCode = 400
+            ..headers.contentType = ContentType.html
+            ..write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0b;color:#e4e4e7;">'
+                '<h2 style="color:#ef4444;">&#x274C; 認証に失敗しました</h2>'
+                '<p>セキュリティトークンの不一致が検出されました。<br>'
+                'Kuraudo に戻ってもう一度お試しください。</p>'
+                '</body></html>');
+          await request.response.close();
+        } else {
+          authCode = receivedCode;
+          // ブラウザに成功画面を返す
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.html
+            ..write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0b;color:#e4e4e7;">'
+                '<h2 style="color:#22c55e;">&#x2705; 認証成功</h2>'
+                '<p>Kuraudoに戻ってください。このタブは閉じて構いません。</p>'
+                '</body></html>');
+          await request.response.close();
+        }
       } catch (_) {
         // タイムアウト
       } finally {
         await server.close();
+      }
+
+      if (stateMismatch) {
+        // CSRF疑い時はトークン交換に進まずに失敗扱い
+        _status = SyncStatus.error;
+        return false;
       }
 
       if (authCode == null) {

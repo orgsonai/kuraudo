@@ -29,6 +29,13 @@ data class ParsedFields(
 class KuraudoAutofillService : AutofillService() {
 
     companion object {
+        /// M-04 セキュリティ設計（Vault ロック時のキャッシュクリア）:
+        /// - Vault 解錠時に MainActivity 経由で全エントリが流し込まれる
+        /// - Vault ロック時に MainActivity の clearAutofillCache が呼ばれ、空リストに戻る
+        /// - ロック中は cachedEntries.isEmpty() = true となるため、
+        ///   onFillRequest が候補を生成せず、パスワード平文がネイティブ側に存在しない
+        /// - 解錠中のメモリ上のパスワードは、Dart 側 vault_service._masterPassword と
+        ///   同等のリスクレベル（Dart/Flutter 言語の既知制約）
         @Volatile
         var cachedEntries: List<AutofillEntry> = emptyList()
     }

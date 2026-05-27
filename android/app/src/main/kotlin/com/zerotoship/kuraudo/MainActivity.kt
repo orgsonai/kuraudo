@@ -45,6 +45,12 @@ class MainActivity : FlutterFragmentActivity() {
                             result.success(false)
                         }
                     }
+                    "clearAutofillCache" -> {
+                        // M-04: Vault ロック時にネイティブ側のキャッシュを完全クリア
+                        // ロック中はパスワード平文がネイティブメモリに残らない
+                        clearCachedEntries()
+                        result.success(true)
+                    }
                     else -> {
                         result.notImplemented()
                     }
@@ -105,5 +111,14 @@ class MainActivity : FlutterFragmentActivity() {
                 url = map["url"] as? String ?: "",
             )
         }
+    }
+
+    /// M-04: Vault ロック時にネイティブ側の autofill キャッシュをクリア
+    ///
+    /// パスワード平文を含むキャッシュをロック中に保持しないことで、
+    /// メモリダンプ攻撃や Android プロセス調査からの情報漏洩を最小化する。
+    /// 解錠時に updateCachedEntries() で再構築される。
+    private fun clearCachedEntries() {
+        KuraudoAutofillService.cachedEntries = emptyList()
     }
 }

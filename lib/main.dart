@@ -98,6 +98,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   bool _pinEnabled = false;
   bool _biometricEnabled = false;
   int _pinThresholdMinutes = 5; // この時間以内ならPIN/生体で解除可
+  bool _pinLockoutPersistent = false; // H-02: PIN試行回数の永続化（任意適用）
   bool _quickLocked = false;    // true=短時間ロック（PIN可）, false=通常ロック（マスターPW必須）
   final _secureStorage = const FlutterSecureStorage();
 
@@ -115,6 +116,11 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         _syncManager.onVaultSaved();
       }
       _updateAutofillCache();
+    };
+    // M-04: ロック時コールバック: Android Autofillネイティブキャッシュをクリア
+    // ロック中はパスワード平文がネイティブメモリに残らない
+    _vaultService.onLocked = () {
+      AutofillService().clearNativeCache();
     };
     _loadSettings();
     _startIdleTimer();
@@ -154,6 +160,9 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.detached) {
       // アプリ終了時にクリップボードをクリア
       if (_clipboardAutoClear) clearClipboardFully();
+      // M-04: アプリ終了時にAutofillネイティブキャッシュもクリア
+      // プロセスが残るケース（OSがプロセスを保持する場合）に備える
+      AutofillService().clearNativeCache();
     } else if (state == AppLifecycleState.resumed) {
       _checkAutoLock();
       // フォアグラウンドに戻ったら操作時刻をリセット
@@ -239,6 +248,23 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   /// SecureStorageに保存するキー: 最後に使ったVaultのフルパス
   static const String _kVaultPathKey = 'vault_path';
 
+  /// M-01: セキュリティ重要設定の SecureStorage キー（プレフィックス kuraudo_sec_）
+  ///
+  /// これらは値を改ざんされると自動ロックや PIN 認証が無効化されるため、
+  /// OS のキーストア（Android Keystore / Linux Secret Service /
+  /// Windows Credential Manager）経由で保護する。
+  ///
+  /// 非セキュリティ設定（themeMode, syncBackend 等）は従来通り
+  /// kuraudo_settings.json に平文 JSON 保存する。
+  static const String _kSecAutoLockMinutes = 'kuraudo_sec_auto_lock_minutes';
+  static const String _kSecClipboardAutoClear = 'kuraudo_sec_clipboard_auto_clear';
+  static const String _kSecPinEnabled = 'kuraudo_sec_pin_enabled';
+  static const String _kSecBiometricEnabled = 'kuraudo_sec_biometric_enabled';
+  static const String _kSecPinThresholdMinutes = 'kuraudo_sec_pin_threshold_minutes';
+  static const String _kSecPinLockoutPersistent = 'kuraudo_sec_pin_lockout_persistent';
+  /// マイグレーション済みフラグ（旧 JSON から SecureStorage への移行が完了したか）
+  static const String _kSecMigrationDone = 'kuraudo_sec_migration_v1_done';
+
   /// 設定ファイルのパスを取得（Vaultと同じフォルダの kuraudo_settings.json）
   /// Vaultパスが未確定の場合は null を返す
   String? get _settingsPath {
@@ -253,34 +279,34 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       _lastVaultPath = await _secureStorage.read(key: _kVaultPathKey);
     } catch (_) {}
 
-    // 2. Vaultフォルダの設定ファイルから本体設定を読み込み
+    // 2. Vaultフォルダの設定ファイル（非セキュリティ項目）を読み込み
     final settingsPath = _settingsPath;
+    Map<String, dynamic> jsonSettings = {};
     if (settingsPath != null) {
       try {
         final file = File(settingsPath);
         if (await file.exists()) {
-          final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-          _autoLockMinutes = json['autoLockMinutes'] as int? ?? 5;
-          _passwordExpiryDays = json['passwordExpiryDays'] as int? ?? 90;
-          _themeModeStr = json['themeMode'] as String? ?? 'dark';
-          _autoSyncEnabled = json['autoSyncEnabled'] as bool? ?? true;
-          _realtimeSyncEnabled = json['realtimeSyncEnabled'] as bool? ?? true;
-          _clipboardAutoClear = json['clipboardAutoClear'] as bool? ?? true;
-          _pinEnabled = json['pinEnabled'] as bool? ?? false;
-          _biometricEnabled = json['biometricEnabled'] as bool? ?? false;
-          _pinThresholdMinutes = json['pinThresholdMinutes'] as int? ?? 5;
-
-          // バックエンド種別をロード
-          final backendId = json['syncBackend'] as String? ?? 'gdrive';
-          _backendKind = _parseBackendKind(backendId);
-          _syncManager.setBackend(_currentBackend);
-
-          _applyThemeMode();
+          jsonSettings = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
         }
       } catch (_) {}
     }
 
-    // 3. 起動時のVault状態判定
+    // 3. 非セキュリティ項目を平文 JSON から読み込み
+    _passwordExpiryDays = jsonSettings['passwordExpiryDays'] as int? ?? 90;
+    _themeModeStr = jsonSettings['themeMode'] as String? ?? 'dark';
+    _autoSyncEnabled = jsonSettings['autoSyncEnabled'] as bool? ?? true;
+    _realtimeSyncEnabled = jsonSettings['realtimeSyncEnabled'] as bool? ?? true;
+    final backendId = jsonSettings['syncBackend'] as String? ?? 'gdrive';
+    _backendKind = _parseBackendKind(backendId);
+    _syncManager.setBackend(_currentBackend);
+
+    // 4. M-01: セキュリティ重要項目を SecureStorage から読み込み
+    //    マイグレーション未実施なら旧 JSON から移行する
+    await _loadSecuritySettings(jsonSettings);
+
+    _applyThemeMode();
+
+    // 5. 起動時のVault状態判定
     if (_lastVaultPath != null && await File(_lastVaultPath!).exists()) {
       setState(() { _isNewVault = false; _isLoading = false; });
     } else {
@@ -292,6 +318,106 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     _startIdleTimer();
   }
 
+  /// M-01: セキュリティ重要設定を SecureStorage から読み込む
+  ///
+  /// マイグレーション未実施の場合（旧バージョンからのアップデート）、
+  /// 旧 JSON [legacyJson] の値を SecureStorage に書き出してから完了フラグを立てる。
+  /// それ以降は SecureStorage のみが信頼できるソースとなる。
+  ///
+  /// SecureStorage 読み込み失敗時は安全側の既定値を採用（ロックは有効、PINは無効など）。
+  Future<void> _loadSecuritySettings(Map<String, dynamic> legacyJson) async {
+    try {
+      final migrated = await _secureStorage.read(key: _kSecMigrationDone);
+      if (migrated != 'true') {
+        // 初回マイグレーション: 旧 JSON 値を SecureStorage へ移行
+        await _migrateSecuritySettings(legacyJson);
+      }
+
+      // SecureStorage から読み込み（マイグレーション後はこれが信頼できるソース）
+      _autoLockMinutes = int.tryParse(
+        await _secureStorage.read(key: _kSecAutoLockMinutes) ?? '',
+      ) ?? 5;
+      _clipboardAutoClear = (await _secureStorage.read(key: _kSecClipboardAutoClear)) != 'false';
+      _pinEnabled = (await _secureStorage.read(key: _kSecPinEnabled)) == 'true';
+      _biometricEnabled = (await _secureStorage.read(key: _kSecBiometricEnabled)) == 'true';
+      _pinThresholdMinutes = int.tryParse(
+        await _secureStorage.read(key: _kSecPinThresholdMinutes) ?? '',
+      ) ?? 5;
+      _pinLockoutPersistent = (await _secureStorage.read(key: _kSecPinLockoutPersistent)) == 'true';
+    } catch (_) {
+      // SecureStorage 読み込み失敗時は安全側の既定値を採用
+      _autoLockMinutes = 5;
+      _clipboardAutoClear = true;
+      _pinEnabled = false;
+      _biometricEnabled = false;
+      _pinThresholdMinutes = 5;
+      _pinLockoutPersistent = false;
+    }
+  }
+
+  /// M-01: 旧 kuraudo_settings.json のセキュリティ項目を SecureStorage に移行
+  ///
+  /// 既存ユーザーのアップデート時に1回だけ実行される。
+  /// 旧 JSON ファイルからセキュリティ関連キーを削除し、平文 JSON を再保存する。
+  Future<void> _migrateSecuritySettings(Map<String, dynamic> legacyJson) async {
+    try {
+      // 旧 JSON から値を取り出して SecureStorage へ書き込み
+      // 旧キーが無い場合は既定値を書き込む（新規インストール時はこれ）
+      await _secureStorage.write(
+        key: _kSecAutoLockMinutes,
+        value: (legacyJson['autoLockMinutes'] as int? ?? 5).toString(),
+      );
+      await _secureStorage.write(
+        key: _kSecClipboardAutoClear,
+        value: (legacyJson['clipboardAutoClear'] as bool? ?? true).toString(),
+      );
+      await _secureStorage.write(
+        key: _kSecPinEnabled,
+        value: (legacyJson['pinEnabled'] as bool? ?? false).toString(),
+      );
+      await _secureStorage.write(
+        key: _kSecBiometricEnabled,
+        value: (legacyJson['biometricEnabled'] as bool? ?? false).toString(),
+      );
+      await _secureStorage.write(
+        key: _kSecPinThresholdMinutes,
+        value: (legacyJson['pinThresholdMinutes'] as int? ?? 5).toString(),
+      );
+      await _secureStorage.write(
+        key: _kSecPinLockoutPersistent,
+        value: (legacyJson['pinLockoutPersistent'] as bool? ?? false).toString(),
+      );
+
+      // 完了フラグ
+      await _secureStorage.write(key: _kSecMigrationDone, value: 'true');
+
+      // 旧 JSON ファイルからセキュリティ項目を削除
+      // （平文ファイルに残っていると改ざんの誘因になるため）
+      final settingsPath = _settingsPath;
+      if (settingsPath != null) {
+        try {
+          final file = File(settingsPath);
+          if (await file.exists()) {
+            final cleaned = Map<String, dynamic>.from(legacyJson);
+            cleaned.remove('autoLockMinutes');
+            cleaned.remove('clipboardAutoClear');
+            cleaned.remove('pinEnabled');
+            cleaned.remove('biometricEnabled');
+            cleaned.remove('pinThresholdMinutes');
+            cleaned.remove('pinLockoutPersistent');
+            await file.writeAsString(jsonEncode(cleaned));
+          }
+        } catch (_) {}
+      }
+    } catch (_) {
+      // マイグレーション失敗時はフラグを立てない（次回起動時に再試行）
+    }
+  }
+
+  /// M-01: 非セキュリティ設定を平文 JSON に保存
+  ///
+  /// セキュリティ重要項目（autoLockMinutes 等）は _saveSecuritySetting() で
+  /// SecureStorage へ保存されるため、ここには含めない。
   Future<void> _saveSettings() async {
     final settingsPath = _settingsPath;
     if (settingsPath == null) return; // Vault未指定なら保存先がないのでスキップ
@@ -299,17 +425,22 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       final file = File(settingsPath);
       await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode({
-        'autoLockMinutes': _autoLockMinutes,
         'passwordExpiryDays': _passwordExpiryDays,
         'themeMode': _themeModeStr,
         'autoSyncEnabled': _autoSyncEnabled,
         'realtimeSyncEnabled': _realtimeSyncEnabled,
-        'clipboardAutoClear': _clipboardAutoClear,
-        'pinEnabled': _pinEnabled,
-        'biometricEnabled': _biometricEnabled,
-        'pinThresholdMinutes': _pinThresholdMinutes,
         'syncBackend': _backendIdOf(_backendKind),
       }));
+    } catch (_) {}
+  }
+
+  /// M-01: 単一のセキュリティ設定を SecureStorage に保存
+  ///
+  /// [key] は _kSec* のいずれか。値は文字列化して書き込む。
+  /// SecureStorage 書き込み失敗時は静かに無視する（次回操作で再試行される）。
+  Future<void> _saveSecuritySetting(String key, dynamic value) async {
+    try {
+      await _secureStorage.write(key: key, value: value.toString());
     } catch (_) {}
   }
 
@@ -403,7 +534,12 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         onInteraction: resetInteractionTime,
         autoLockMinutes: _autoLockMinutes,
         passwordExpiryDays: _passwordExpiryDays,
-        onAutoLockChanged: (v) { _autoLockMinutes = v; _saveSettings(); _startIdleTimer(); },
+        // M-01: autoLockMinutes はセキュリティ重要 → SecureStorage に保存
+        onAutoLockChanged: (v) {
+          _autoLockMinutes = v;
+          _saveSecuritySetting(_kSecAutoLockMinutes, v);
+          _startIdleTimer();
+        },
         onPasswordExpiryChanged: (v) { _passwordExpiryDays = v; _saveSettings(); },
         themeMode: _themeModeStr,
         onThemeModeChanged: _onThemeModeChanged,
@@ -412,13 +548,32 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
         onAutoSyncChanged: (v) { _autoSyncEnabled = v; _saveSettings(); },
         onRealtimeSyncChanged: (v) { _realtimeSyncEnabled = v; _saveSettings(); },
         clipboardAutoClear: _clipboardAutoClear,
-        onClipboardAutoClearChanged: (v) { _clipboardAutoClear = v; _saveSettings(); },
+        // M-01: clipboardAutoClear はセキュリティ重要 → SecureStorage に保存
+        onClipboardAutoClearChanged: (v) {
+          _clipboardAutoClear = v;
+          _saveSecuritySetting(_kSecClipboardAutoClear, v);
+        },
         pinEnabled: _pinEnabled,
         biometricEnabled: _biometricEnabled,
         pinThresholdMinutes: _pinThresholdMinutes,
-        onPinEnabledChanged: (v) { _pinEnabled = v; _saveSettings(); },
-        onBiometricEnabledChanged: (v) { _biometricEnabled = v; _saveSettings(); },
-        onPinThresholdChanged: (v) { _pinThresholdMinutes = v; _saveSettings(); },
+        // M-01: PIN/生体認証関連はすべてセキュリティ重要 → SecureStorage に保存
+        onPinEnabledChanged: (v) {
+          _pinEnabled = v;
+          _saveSecuritySetting(_kSecPinEnabled, v);
+        },
+        onBiometricEnabledChanged: (v) {
+          _biometricEnabled = v;
+          _saveSecuritySetting(_kSecBiometricEnabled, v);
+        },
+        onPinThresholdChanged: (v) {
+          _pinThresholdMinutes = v;
+          _saveSecuritySetting(_kSecPinThresholdMinutes, v);
+        },
+        pinLockoutPersistent: _pinLockoutPersistent,
+        onPinLockoutPersistentChanged: (v) {
+          _pinLockoutPersistent = v;
+          _saveSecuritySetting(_kSecPinLockoutPersistent, v);
+        },
         secureStorage: _secureStorage,
       );
     }
@@ -434,6 +589,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       quickLocked: _quickLocked,
       pinEnabled: _pinEnabled,
       biometricEnabled: _biometricEnabled,
+      pinLockoutPersistent: _pinLockoutPersistent,
       secureStorage: _secureStorage,
       onQuickUnlocked: () {
         // PIN/生体認証で解除成功 → 前回のVaultを再アンロック

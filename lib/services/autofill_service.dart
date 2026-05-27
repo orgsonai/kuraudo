@@ -318,6 +318,23 @@ class AutofillService {
     }
   }
 
+  /// M-04: Android ネイティブ側のAutofillキャッシュをクリア
+  ///
+  /// Vault ロック時に呼び出して、ネイティブ側に残っているパスワード平文を
+  /// 確実に消去する。これによりロック中はパスワードが Android プロセス
+  /// メモリに存在しなくなる。
+  ///
+  /// Android 以外のプラットフォームでは何もしない（no-op）。
+  Future<void> clearNativeCache() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      await _channel.invokeMethod('clearAutofillCache');
+    } catch (_) {
+      // 失敗しても無視（Autofill非対応端末等）
+    }
+  }
+
   /// Windows/Linux: グローバルホットキーの登録
   /// 
   /// ※ 実際のグローバルホットキーはプラットフォーム固有のプラグインが必要
@@ -350,6 +367,10 @@ class AutofillService {
   }
 
   /// Linux: xdotool を使用した自動入力
+  ///
+  /// M-02 セキュリティ修正: パスワードをコマンドライン引数ではなく stdin 経由で渡す。
+  /// xdotool の `--file -` オプションで stdin から読み込ませることで、
+  /// /proc/[pid]/cmdline や `ps aux` からパスワードが見えなくなる。
   Future<AutoTypeResult> _autoTypeLinux(VaultEntry entry) async {
     // xdotool が利用可能か確認
     final which = await Process.run('which', ['xdotool']);
@@ -361,19 +382,43 @@ class AutofillService {
     // 少し待ってからフォーカスを元ウィンドウに戻す
     await Future.delayed(const Duration(milliseconds: 300));
 
-    // ユーザー名を入力
+    // ユーザー名を入力（stdin経由）
     if (entry.username.isNotEmpty) {
-      await Process.run('xdotool', ['type', '--clearmodifiers', '--delay', '12', entry.username]);
+      await _xdotoolTypeViaStdin(entry.username);
       await Future.delayed(const Duration(milliseconds: 50));
       // Tab で次のフィールドへ
       await Process.run('xdotool', ['key', 'Tab']);
       await Future.delayed(const Duration(milliseconds: 100));
     }
 
-    // パスワードを入力
-    await Process.run('xdotool', ['type', '--clearmodifiers', '--delay', '12', entry.password]);
+    // パスワードを入力（stdin経由 ─ /proc/cmdline に出ない）
+    await _xdotoolTypeViaStdin(entry.password);
 
     return AutoTypeResult(success: true, message: '自動入力が完了しました');
+  }
+
+  /// xdotool への入力を stdin 経由で行う（M-02）
+  ///
+  /// `xdotool type --file - --delay 12` 形式で起動し、テキストを stdin に書き込む。
+  /// これによりパスワードがコマンドライン引数に現れず、
+  /// 同一 UID の別プロセスからの覗き見を防ぐ。
+  ///
+  /// xdotool 3.20160805 以降で `--file` オプションをサポート。
+  /// Arch Linux / Ubuntu 20.04 以降はすべて対応版が標準。
+  Future<void> _xdotoolTypeViaStdin(String text) async {
+    final process = await Process.start(
+      'xdotool',
+      ['type', '--clearmodifiers', '--delay', '12', '--file', '-'],
+    );
+    try {
+      process.stdin.write(text);
+      await process.stdin.flush();
+      await process.stdin.close();
+      await process.exitCode;
+    } catch (_) {
+      // stdin/プロセスエラー時はストリームを必ず閉じる
+      try { await process.stdin.close(); } catch (_) {}
+    }
   }
 
   /// Windows: PowerShell SendKeys を使用した自動入力
