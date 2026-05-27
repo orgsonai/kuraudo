@@ -8,8 +8,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// key.properties を読み込み
-val keystorePropertiesFile = rootProject.file("key.properties")
+// key.properties を読み込み（Flutter プロジェクトルート＝android/ の親）
+val keystorePropertiesFile = rootProject.file("../key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))

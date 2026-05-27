@@ -46,6 +46,7 @@ app.*.map.json
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
+/key.properties
 **/*.keystore
 **/*.jks
 /android/app/debug
