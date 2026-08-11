@@ -3,7 +3,8 @@
 /// パスワード/パスフレーズ生成UIウィジェット
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:flutter/services.dart';
 import '../../core/password_generator.dart';
 import '../theme/kuraudo_theme.dart';
@@ -383,14 +384,14 @@ class _PasswordGeneratorSheetState extends State<PasswordGeneratorSheet> {
                     TextField(
                       controller: _customSymbolsCtrl,
                       decoration: InputDecoration(
-                        labelText: '使用する特殊文字',
+                        labelText: '使用する特殊文字'.l10n(context),
                         hintText: r'!@#$%^&*()-_=+',
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         prefixIcon: const Icon(Icons.text_fields_rounded, size: 18),
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.restore_rounded, size: 16),
-                          tooltip: 'デフォルトに戻す',
+                          tooltip: 'デフォルトに戻す'.l10n(context),
                           onPressed: () {
                             _customSymbolsCtrl.text = r'!@#$%^&*()-_=+[]{}|;:,.<>?';
                             _customSymbols = _customSymbolsCtrl.text;
@@ -407,14 +408,14 @@ class _PasswordGeneratorSheetState extends State<PasswordGeneratorSheet> {
                     TextField(
                       controller: _excludeCharsCtrl,
                       decoration: InputDecoration(
-                        labelText: '除外する文字',
+                        labelText: '除外する文字'.l10n(context),
                         hintText: '例: lI1O0o',
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         prefixIcon: const Icon(Icons.block_rounded, size: 18),
                         suffixIcon: _excludeChars.isNotEmpty ? IconButton(
                           icon: const Icon(Icons.clear_rounded, size: 16),
-                          tooltip: 'クリア',
+                          tooltip: 'クリア'.l10n(context),
                           onPressed: () {
                             _excludeCharsCtrl.text = '';
                             _excludeChars = '';
@@ -524,7 +525,7 @@ class _PasswordGeneratorSheetState extends State<PasswordGeneratorSheet> {
                                 );
                               },
                               visualDensity: VisualDensity.compact,
-                              tooltip: '全件コピー',
+                              tooltip: '全件コピー'.l10n(context),
                             ),
                             IconButton(
                               icon: const Icon(Icons.close_rounded, size: 16),

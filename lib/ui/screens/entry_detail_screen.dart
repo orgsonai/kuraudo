@@ -4,8 +4,10 @@
 library;
 
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:flutter/material.dart' as material show Text;
 import 'package:flutter/services.dart';
+import '../../l10n/kuraudo_localizations.dart';
 import '../../models/vault_entry.dart';
 import '../../services/autofill_service.dart';
 import '../../services/vault_service.dart';
@@ -139,7 +141,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_entry.title),
+        title: Text.raw(_entry.title),
         actions: [
           IconButton(
             icon: Icon(
@@ -199,7 +201,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Center(
-                          child: Text(
+                          child: Text.raw(
                             _entry.title.isNotEmpty
                                 ? _entry.title[0].toUpperCase()
                                 : '?',
@@ -216,7 +218,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            Text.raw(
                               _entry.title,
                               style: const TextStyle(
                                 fontSize: 20,
@@ -234,7 +236,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                                   color: cs.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text(
+                                child: Text.raw(
                                   _entry.category!,
                                   style: TextStyle(
                                     fontSize: 11,
@@ -398,7 +400,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                           children: _entry.tags
                               .map(
                                 (t) => Chip(
-                                  label: Text(t),
+                                  label: Text.raw(t),
                                   materialTapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                   visualDensity: VisualDensity.compact,
@@ -461,7 +463,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                           );
                           return ListTile(
                             dense: true,
-                            title: Text(
+                            title: Text.raw(
                               isVisible ? record.password : '••••••••',
                               style: TextStyle(
                                 fontSize: 13,
@@ -469,7 +471,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                                 color: cs.onSurfaceVariant,
                               ),
                             ),
-                            subtitle: Text(
+                            subtitle: Text.raw(
                               _formatDate(record.changedAt),
                               style: TextStyle(
                                 fontSize: 11,
@@ -602,7 +604,7 @@ class _FieldTile extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             if (selectable)
-              SelectableText(
+              _GlyphBoundedSelectableText(
                 value,
                 style: TextStyle(
                   fontSize: 15,
@@ -611,7 +613,7 @@ class _FieldTile extends StatelessWidget {
                 ),
               )
             else
-              Text(
+              Text.raw(
                 value,
                 style: TextStyle(
                   fontSize: 15,
@@ -623,6 +625,61 @@ class _FieldTile extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Selectable multi-line text whose highlight is limited to rendered glyphs.
+///
+/// A single SelectableText paints the newline selection up to the paragraph's
+/// widest line. Splitting visual lines avoids that artificial horizontal
+/// highlight. Each visual line keeps its trailing newline in the same text
+/// paragraph, so copying a selection across lines also preserves line breaks.
+class _GlyphBoundedSelectableText extends StatelessWidget {
+  final String data;
+  final TextStyle? style;
+
+  const _GlyphBoundedSelectableText(this.data, {this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = data.split('\n');
+    final selectionTextByLine = List<String>.filled(lines.length, '');
+    for (var index = 0; index < lines.length; index++) {
+      if (lines[index].isEmpty) continue;
+      var nextContent = index + 1;
+      while (nextContent < lines.length && lines[nextContent].isEmpty) {
+        nextContent++;
+      }
+      final newlineCount = nextContent < lines.length
+          ? nextContent - index
+          : lines.length - 1 - index;
+      selectionTextByLine[index] =
+          '${lines[index]}${List.filled(newlineCount, '\n').join()}';
+    }
+    final effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+    final lineHeight = MediaQuery.textScalerOf(context).scale(
+          effectiveStyle.fontSize ?? 14,
+        ) *
+        (effectiveStyle.height ?? 1);
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var index = 0; index < lines.length; index++)
+            ClipRect(
+              child: SizedBox(
+                height: lineHeight,
+                child: material.Text.rich(
+                  TextSpan(
+                    text: selectionTextByLine[index],
+                  ),
+                  style: effectiveStyle,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

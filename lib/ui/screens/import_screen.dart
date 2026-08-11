@@ -5,7 +5,8 @@ library;
 
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import '../../services/csv_importer.dart';
 import '../../services/vault_service.dart';
 import '../theme/kuraudo_theme.dart';
@@ -331,7 +332,7 @@ class _ImportScreenState extends State<ImportScreen> {
             controller: _pasteController,
             maxLines: 8,
             decoration: InputDecoration(
-              hintText: 'ここにCSVをペースト...',
+              hintText: 'ここにCSVをペースト...'.l10n(context),
               alignLabelWithHint: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),

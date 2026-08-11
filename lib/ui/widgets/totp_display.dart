@@ -5,7 +5,8 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:flutter/services.dart';
 import '../../core/totp_generator.dart';
 import '../theme/kuraudo_theme.dart';

@@ -3,7 +3,8 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
@@ -272,10 +273,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final ctrl = TextEditingController(text: old == '未分類' ? '' : old);
     final existingCats = _categories.where((c) => c != old).toList();
     final n = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('カテゴリ/フォルダ名を変更'), content: Row(children: [
-      Expanded(child: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: '新しいフォルダ名'), onSubmitted: (v) => Navigator.pop(ctx, v))),
+      Expanded(child: TextField(controller: ctrl, autofocus: true, decoration: InputDecoration(labelText: '新しいフォルダ名'.l10n(context)), onSubmitted: (v) => Navigator.pop(ctx, v))),
       if (existingCats.isNotEmpty) PopupMenuButton<String>(
         icon: const Icon(Icons.arrow_drop_down_rounded, size: 24),
-        tooltip: '既存フォルダから選択',
+        tooltip: '既存フォルダから選択'.l10n(context),
         popUpAnimationStyle: AnimationStyle(duration: Duration.zero),
         onSelected: (v) { ctrl.text = v; },
         itemBuilder: (_) => existingCats.map((c) => PopupMenuItem(value: c, child: Row(children: [const Icon(Icons.folder_rounded, size: 16), const SizedBox(width: 8), Text(c)]))).toList(),
@@ -368,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final ctrl = TextEditingController();
     final newCat = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
       title: Text('${_selectedUuids.length}件のカテゴリを変更'),
-      content: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: '新しいカテゴリ名')),
+      content: TextField(controller: ctrl, autofocus: true, decoration: InputDecoration(labelText: '新しいカテゴリ名'.l10n(context))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル')),
         ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('変更')),
@@ -457,17 +458,17 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
       appBar: AppBar(title: _multiSelectMode ? Text('${_selectedUuids.length}件選択中') : const Text('Kuraudo'),
         leading: _multiSelectMode
-          ? IconButton(icon: const Icon(Icons.close_rounded, size: 20), tooltip: '選択解除', onPressed: () => setState(() { _multiSelectMode = false; _selectedUuids.clear(); }))
-          : IconButton(icon: const Icon(Icons.lock_rounded, size: 20), tooltip: 'ロック', onPressed: () { widget.vaultService.lock(); widget.onLock(); }),
+          ? IconButton(icon: const Icon(Icons.close_rounded, size: 20), tooltip: '選択解除'.l10n(context), onPressed: () => setState(() { _multiSelectMode = false; _selectedUuids.clear(); }))
+          : IconButton(icon: const Icon(Icons.lock_rounded, size: 20), tooltip: 'ロック'.l10n(context), onPressed: () { widget.vaultService.lock(); widget.onLock(); }),
         actions: _multiSelectMode ? [
-          IconButton(icon: const Icon(Icons.select_all_rounded, size: 20), tooltip: '全選択', onPressed: () => setState(() { for (final e in _cachedEntries) _selectedUuids.add(e.uuid); })),
-          IconButton(icon: const Icon(Icons.folder_rounded, size: 20), tooltip: 'カテゴリ変更', onPressed: _selectedUuids.isNotEmpty ? _bulkChangeCategory : null),
-          IconButton(icon: Icon(Icons.delete_rounded, size: 20, color: KuraudoTheme.danger), tooltip: 'ゴミ箱に移動', onPressed: _selectedUuids.isNotEmpty ? _bulkTrash : null),
+          IconButton(icon: const Icon(Icons.select_all_rounded, size: 20), tooltip: '全選択'.l10n(context), onPressed: () => setState(() { for (final e in _cachedEntries) _selectedUuids.add(e.uuid); })),
+          IconButton(icon: const Icon(Icons.folder_rounded, size: 20), tooltip: 'カテゴリ変更'.l10n(context), onPressed: _selectedUuids.isNotEmpty ? _bulkChangeCategory : null),
+          IconButton(icon: Icon(Icons.delete_rounded, size: 20, color: KuraudoTheme.danger), tooltip: 'ゴミ箱に移動'.l10n(context), onPressed: _selectedUuids.isNotEmpty ? _bulkTrash : null),
         ] : [
-          Builder(builder: (btnCtx) => IconButton(icon: const Icon(Icons.sort_rounded, size: 20), tooltip: 'ソート', onPressed: () => _showSortMenu(btnCtx))),
-          IconButton(icon: Icon(_showFavoritesOnly ? Icons.star_rounded : Icons.star_outline_rounded, color: _showFavoritesOnly ? KuraudoTheme.warning : null), tooltip: 'お気に入り', onPressed: _setFavFilter),
-          if (!isWide) IconButton(icon: Icon(Icons.delete_rounded, size: 20, color: _showTrash ? KuraudoTheme.danger : null), tooltip: 'ゴミ箱', onPressed: _setTrashView),
-          Builder(builder: (btnCtx) => IconButton(icon: const Icon(Icons.more_vert_rounded, size: 20), tooltip: 'メニュー', onPressed: () => _showMainMenu(btnCtx))),
+          Builder(builder: (btnCtx) => IconButton(icon: const Icon(Icons.sort_rounded, size: 20), tooltip: 'ソート'.l10n(context), onPressed: () => _showSortMenu(btnCtx))),
+          IconButton(icon: Icon(_showFavoritesOnly ? Icons.star_rounded : Icons.star_outline_rounded, color: _showFavoritesOnly ? KuraudoTheme.warning : null), tooltip: 'お気に入り'.l10n(context), onPressed: _setFavFilter),
+          if (!isWide) IconButton(icon: Icon(Icons.delete_rounded, size: 20, color: _showTrash ? KuraudoTheme.danger : null), tooltip: 'ゴミ箱'.l10n(context), onPressed: _setTrashView),
+          Builder(builder: (btnCtx) => IconButton(icon: const Icon(Icons.more_vert_rounded, size: 20), tooltip: 'メニュー'.l10n(context), onPressed: () => _showMainMenu(btnCtx))),
         ],
       ),
       body: Column(children: [
@@ -555,8 +556,8 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(width: 42, height: 42, decoration: BoxDecoration(color: cs.onSurfaceVariant.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Center(child: Text(e.title.isNotEmpty ? e.title[0].toUpperCase() : '?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)))),
             const SizedBox(width: 14),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(e.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis), const SizedBox(height: 2), Text('削除: ${_fmtDate(e.deletedAt!)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))])),
-            IconButton(icon: Icon(Icons.restore_rounded, size: 20, color: KuraudoTheme.accent), tooltip: '復元', onPressed: () async { await widget.vaultService.restoreEntry(e.uuid); _showStatus('復元しました'); _refresh(); }),
-            IconButton(icon: Icon(Icons.delete_forever_rounded, size: 20, color: KuraudoTheme.danger), tooltip: '完全削除', onPressed: () async {
+            IconButton(icon: Icon(Icons.restore_rounded, size: 20, color: KuraudoTheme.accent), tooltip: '復元'.l10n(context), onPressed: () async { await widget.vaultService.restoreEntry(e.uuid); _showStatus('復元しました'); _refresh(); }),
+            IconButton(icon: Icon(Icons.delete_forever_rounded, size: 20, color: KuraudoTheme.danger), tooltip: '完全削除'.l10n(context), onPressed: () async {
               final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('完全に削除'), content: Text('「${e.title}」を完全に削除しますか？'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')), TextButton(onPressed: () => Navigator.pop(ctx, true), style: TextButton.styleFrom(foregroundColor: KuraudoTheme.danger), child: const Text('削除'))]));
               if (confirm == true) { await widget.vaultService.deleteEntry(e.uuid); _showStatus('完全に削除しました'); _refresh(); }
             }),
@@ -574,7 +575,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(children: [
       Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Focus(
         onFocusChange: (f) => _searchFocused = f,
-        child: TextField(controller: _searchCtrl, onChanged: (v) { _searchQuery = v; _markDirty(); setState(() {}); }, decoration: InputDecoration(hintText: 'エントリを検索...', prefixIcon: const Icon(Icons.search_rounded, size: 20), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded, size: 18), tooltip: 'クリア', onPressed: () { _searchCtrl.clear(); _searchQuery = ''; _markDirty(); setState(() {}); }) : null, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12))),
+        child: TextField(controller: _searchCtrl, onChanged: (v) { _searchQuery = v; _markDirty(); setState(() {}); }, decoration: InputDecoration(hintText: 'エントリを検索...'.l10n(context), prefixIcon: const Icon(Icons.search_rounded, size: 20), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded, size: 18), tooltip: 'クリア'.l10n(context), onPressed: () { _searchCtrl.clear(); _searchQuery = ''; _markDirty(); setState(() {}); }) : null, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12))),
       )),
       Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), decoration: BoxDecoration(border: Border(bottom: BorderSide(color: cs.outline))),
         child: Row(children: [const SizedBox(width: 48), Expanded(flex: 3, child: Text('タイトル', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))), Expanded(flex: 3, child: Text('ユーザー名', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))), Expanded(flex: 2, child: Text('カテゴリ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))), Expanded(flex: 2, child: Text('更新日', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))), const SizedBox(width: 80)])),
@@ -616,7 +617,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _mobList(List<VaultEntry> entries, ColorScheme cs) => Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 700), child: Column(children: [
-    Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: TextField(controller: _searchCtrl, onChanged: (v) { _searchQuery = v; _markDirty(); setState(() {}); }, decoration: InputDecoration(hintText: 'エントリを検索...', prefixIcon: const Icon(Icons.search_rounded, size: 20), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded, size: 18), tooltip: 'クリア', onPressed: () { _searchCtrl.clear(); _searchQuery = ''; _markDirty(); setState(() {}); }) : null, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)))),
+    Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: TextField(controller: _searchCtrl, onChanged: (v) { _searchQuery = v; _markDirty(); setState(() {}); }, decoration: InputDecoration(hintText: 'エントリを検索...'.l10n(context), prefixIcon: const Icon(Icons.search_rounded, size: 20), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded, size: 18), tooltip: 'クリア'.l10n(context), onPressed: () { _searchCtrl.clear(); _searchQuery = ''; _markDirty(); setState(() {}); }) : null, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)))),
     if (_categories.length > 1) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(10), border: Border.all(color: cs.outline)), child: DropdownButtonHideUnderline(child: DropdownButton<String?>(value: _selectedCategory, isExpanded: true, icon: const Icon(Icons.folder_rounded, size: 18), hint: const Text('すべてのカテゴリ', style: TextStyle(fontSize: 13)), style: TextStyle(fontSize: 13, color: cs.onSurface), dropdownColor: cs.surfaceContainerHighest, items: [DropdownMenuItem<String?>(value: null, child: Row(children: [const Icon(Icons.all_inbox_rounded, size: 16), const SizedBox(width: 8), const Text('すべて'), const Spacer(), Text('$_activeCount', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace'))])), ..._categories.map((c) => DropdownMenuItem<String?>(value: c, child: Row(children: [const Icon(Icons.folder_rounded, size: 16), const SizedBox(width: 8), Expanded(child: Text(c, overflow: TextOverflow.ellipsis)), Text('${_categoryCounts[c] ?? 0}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace')), const SizedBox(width: 4), GestureDetector(onTap: () => _renameCategory(c), child: Icon(Icons.edit_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)))])))], onChanged: (v) => _setCategory(v))))),
     const SizedBox(height: 8),
     Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Row(children: [Text('${entries.length}件', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontFamily: 'monospace'))])),
@@ -640,8 +641,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 14),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [if (e.favorite) Padding(padding: const EdgeInsets.only(right: 4), child: Icon(Icons.star_rounded, size: 14, color: KuraudoTheme.warning)), Expanded(child: Text(e.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis))]), const SizedBox(height: 2), Text(e.username.isNotEmpty ? e.username : e.email ?? '', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant), overflow: TextOverflow.ellipsis)])),
             if (!_multiSelectMode) ...[
-              if (e.url != null && e.url!.isNotEmpty) IconButton(icon: const Icon(Icons.open_in_new_rounded, size: 16), tooltip: 'ブラウザで開く', onPressed: () => _openUrl(e.url!), style: IconButton.styleFrom(foregroundColor: KuraudoTheme.info), visualDensity: VisualDensity.compact),
-              IconButton(icon: const Icon(Icons.copy_rounded, size: 18), tooltip: 'パスワードをコピー', onPressed: () => _copyPassword(e), style: IconButton.styleFrom(foregroundColor: cs.onSurfaceVariant)),
+              if (e.url != null && e.url!.isNotEmpty) IconButton(icon: const Icon(Icons.open_in_new_rounded, size: 16), tooltip: 'ブラウザで開く'.l10n(context), onPressed: () => _openUrl(e.url!), style: IconButton.styleFrom(foregroundColor: KuraudoTheme.info), visualDensity: VisualDensity.compact),
+              IconButton(icon: const Icon(Icons.copy_rounded, size: 18), tooltip: 'パスワードをコピー'.l10n(context), onPressed: () => _copyPassword(e), style: IconButton.styleFrom(foregroundColor: cs.onSurfaceVariant)),
             ],
           ]),
         ),

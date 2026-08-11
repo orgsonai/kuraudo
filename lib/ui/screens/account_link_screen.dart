@@ -4,7 +4,8 @@
 /// メールアドレス変更時の影響範囲を可視化
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
 import '../theme/kuraudo_theme.dart';

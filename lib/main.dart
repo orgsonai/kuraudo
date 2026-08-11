@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/vault_service.dart';
 import 'services/google_drive_service.dart';
@@ -12,6 +13,7 @@ import 'services/local_path_backend.dart';
 import 'services/webdav_backend.dart';
 import 'services/sync_manager.dart';
 import 'services/autofill_service.dart';
+import 'l10n/kuraudo_localizations.dart';
 import 'ui/theme/kuraudo_theme.dart';
 import 'ui/screens/lock_screen.dart';
 import 'ui/screens/home_screen.dart';
@@ -54,11 +56,17 @@ class KuraudoApp extends StatefulWidget {
 
 class _KuraudoAppState extends State<KuraudoApp> {
   ThemeMode _themeMode = ThemeMode.dark;
+  Locale _locale = const Locale('ja');
 
   ThemeMode get themeMode => _themeMode;
 
   void setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
+  }
+
+  void setLocale(Locale locale) {
+    if (_locale == locale) return;
+    setState(() => _locale = locale);
   }
 
   @override
@@ -69,6 +77,13 @@ class _KuraudoAppState extends State<KuraudoApp> {
       theme: KuraudoTheme.light,
       darkTheme: KuraudoTheme.dark,
       themeMode: _themeMode,
+      locale: _locale,
+      supportedLocales: const [Locale('ja'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const KuraudoRoot(),
     );
   }
@@ -112,6 +127,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   int _autoLockMinutes = 5;
   int _passwordExpiryDays = 90;
   String _themeModeStr = 'dark';
+  String _languageCode = 'ja';
   bool _autoSyncEnabled = true;
   bool _realtimeSyncEnabled = true;
   bool _clipboardAutoClear = true; // クリップボード自動クリア
@@ -130,6 +146,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    KuraudoLocaleController.onLanguageChanged = _onLanguageChanged;
     WidgetsBinding.instance.addObserver(this);
     _syncManager = SyncManager(vaultService: _vaultService, backend: _currentBackend);
     // 保存時コールバック: リアルタイム同期 + Autofillキャッシュ更新
@@ -164,6 +181,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    KuraudoLocaleController.onLanguageChanged = null;
     _idleTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -316,6 +334,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     // 3. 非セキュリティ項目を平文 JSON から読み込み
     _passwordExpiryDays = jsonSettings['passwordExpiryDays'] as int? ?? 90;
     _themeModeStr = jsonSettings['themeMode'] as String? ?? 'dark';
+    _languageCode = jsonSettings['languageCode'] as String? ?? 'ja';
     _autoSyncEnabled = jsonSettings['autoSyncEnabled'] as bool? ?? true;
     _realtimeSyncEnabled = jsonSettings['realtimeSyncEnabled'] as bool? ?? true;
     final backendId = jsonSettings['syncBackend'] as String? ?? 'gdrive';
@@ -327,6 +346,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     await _loadSecuritySettings(jsonSettings);
 
     _applyThemeMode();
+    _applyLanguage();
 
     // 5. 起動時のVault状態判定
     if (_lastVaultPath != null && await File(_lastVaultPath!).exists()) {
@@ -449,6 +469,7 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       await file.writeAsString(jsonEncode({
         'passwordExpiryDays': _passwordExpiryDays,
         'themeMode': _themeModeStr,
+        'languageCode': _languageCode,
         'autoSyncEnabled': _autoSyncEnabled,
         'realtimeSyncEnabled': _realtimeSyncEnabled,
         'syncBackend': _backendIdOf(_backendKind),
@@ -533,6 +554,16 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   void _onThemeModeChanged(String mode) {
     _themeModeStr = mode;
     _applyThemeMode();
+    _saveSettings();
+  }
+
+  void _applyLanguage() {
+    KuraudoApp.of(context)?.setLocale(Locale(_languageCode));
+  }
+
+  void _onLanguageChanged(String languageCode) {
+    _languageCode = languageCode;
+    _applyLanguage();
     _saveSettings();
   }
 

@@ -1,7 +1,7 @@
 name: kuraudo
 description: "Kuraudo（蔵人）- Google Drive同期型パスワードマネージャー"
 publish_to: 'none'
-version: 0.3.3+9
+version: 0.4.4+14
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -9,6 +9,8 @@ environment:
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   
   # 暗号化

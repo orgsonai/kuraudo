@@ -4,7 +4,8 @@
 /// 同期操作・バックアップ管理を統合した画面
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../services/google_drive_service.dart';
@@ -142,26 +143,26 @@ class _SyncScreenState extends State<SyncScreen> {
               children: [
                 TextField(
                   controller: urlCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'サーバーURL',
+                  decoration: InputDecoration(
+                    labelText: 'サーバーURL'.l10n(context),
                     hintText: 'https://nextcloud.example.com/remote.php/dav/files/user/',
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: userCtrl,
-                  decoration: const InputDecoration(labelText: 'ユーザー名'),
+                  decoration: InputDecoration(labelText: 'ユーザー名'.l10n(context)),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: passCtrl,
-                  decoration: const InputDecoration(labelText: 'パスワード'),
+                  decoration: InputDecoration(labelText: 'パスワード'.l10n(context)),
                   obscureText: true,
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: pathCtrl,
-                  decoration: const InputDecoration(labelText: 'リモートパス（オプション）'),
+                  decoration: InputDecoration(labelText: 'リモートパス（オプション）'.l10n(context)),
                 ),
               ],
             ),
@@ -451,7 +452,7 @@ class _SyncScreenState extends State<SyncScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.swap_horiz_rounded),
-            tooltip: '同期方式を変更',
+            tooltip: '同期方式を変更'.l10n(context),
             onPressed: _showBackendSelector,
           ),
         ],

@@ -4,7 +4,8 @@
 library;
 
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -542,17 +543,17 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                       TextField(
                         controller: _pathController,
                         decoration: InputDecoration(
-                          hintText: 'デフォルト: ~/Documents/kuraudo.kuraudo',
-                          labelText: 'ファイルパス',
+                          hintText: 'デフォルト: ~/Documents/kuraudo.kuraudo'.l10n(context),
+                          labelText: 'ファイルパス'.l10n(context),
                           prefixIcon: const Icon(Icons.folder_rounded, size: 18),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.folder_open_rounded, size: 18),
-                            tooltip: 'エクスプローラーで選択',
+                            tooltip: 'エクスプローラーで選択'.l10n(context),
                             onPressed: () => _showFileBrowser(context),
                           ),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          helperText: widget.isNewVault ? '新規作成先（フォルダアイコンで選択可）' : '読み込むファイル（フォルダアイコンで選択可）',
+                          helperText: (widget.isNewVault ? '新規作成先（フォルダアイコンで選択可）' : '読み込むファイル（フォルダアイコンで選択可）').l10n(context),
                           helperStyle: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                         ),
                         style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
@@ -567,7 +568,7 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                       obscureText: _obscurePassword,
                       autofocus: true,
                       decoration: InputDecoration(
-                        labelText: widget.isNewVault ? 'マスターパスワード（新規）' : 'マスターパスワード',
+                        labelText: (widget.isNewVault ? 'マスターパスワード（新規）' : 'マスターパスワード').l10n(context),
                         prefixIcon: const Icon(Icons.key_rounded, size: 20),
                         suffixIcon: IconButton(
                           icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 20),
@@ -582,7 +583,7 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                         controller: _confirmController,
                         obscureText: _obscureConfirm,
                         decoration: InputDecoration(
-                          labelText: 'パスワードを確認',
+                          labelText: 'パスワードを確認'.l10n(context),
                           prefixIcon: const Icon(Icons.key_rounded, size: 20),
                           suffixIcon: IconButton(
                             icon: Icon(_obscureConfirm ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 20),
@@ -762,7 +763,7 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
               IconButton(
                 icon: const Icon(Icons.arrow_upward_rounded, size: 18),
                 onPressed: _goUp,
-                tooltip: '上のフォルダ',
+                tooltip: '上のフォルダ'.l10n(context),
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(padding: const EdgeInsets.all(4)),
               ),
@@ -775,7 +776,7 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 onPressed: _loadDir,
-                tooltip: '更新',
+                tooltip: '更新'.l10n(context),
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(padding: const EdgeInsets.all(4)),
               ),
@@ -844,11 +845,11 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
             TextField(
               controller: _fileNameController,
               decoration: InputDecoration(
-                labelText: 'ファイル名',
+                labelText: 'ファイル名'.l10n(context),
                 prefixIcon: const Icon(Icons.insert_drive_file_rounded, size: 18),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                helperText: '.kuraudo拡張子が自動付与されます',
+                helperText: '.kuraudo拡張子が自動付与されます'.l10n(context),
                 helperStyle: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
               ),
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),

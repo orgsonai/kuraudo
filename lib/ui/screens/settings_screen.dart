@@ -5,7 +5,8 @@ library;
 
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:local_auth/local_auth.dart';
@@ -80,6 +81,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late int _autoLockMinutes;
   late int _passwordExpiryDays;
   late String _themeMode;
+  String _languageCode = 'ja';
+  bool _languageInitialized = false;
   late bool _autoSyncEnabled;
   late bool _realtimeSyncEnabled;
   late bool _clipboardAutoClear;
@@ -106,6 +109,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _pinLockoutPersistent = widget.pinLockoutPersistent;
     _checkBiometric();
     _loadAppVersion();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_languageInitialized) return;
+    _languageCode = Localizations.localeOf(context).languageCode;
+    _languageInitialized = true;
   }
 
   Future<void> _loadAppVersion() async {
@@ -255,7 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             obscureText: obscure,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: 'マスターパスワード',
+              labelText: 'マスターパスワード'.l10n(context),
               suffixIcon: IconButton(
                 icon: Icon(obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20),
                 onPressed: () => setDialogState(() => obscure = !obscure),
@@ -283,8 +294,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final method = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
-      title: Text('$formatName エクスポート'),
-      content: Text('${entries.length}件のエントリをエクスポートします。'),
+      title: Text(KuraudoLocalizations.isEnglish(context)
+          ? '$formatName Export'
+          : '$formatName エクスポート'),
+      content: Text(KuraudoLocalizations.isEnglish(context)
+          ? '${entries.length} entries will be exported.'
+          : '${entries.length}件のエントリをエクスポートします。'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル')),
         TextButton(onPressed: () => Navigator.pop(ctx, 'clipboard'), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.copy_rounded, size: 16), SizedBox(width: 6), Text('クリップボード')])),
@@ -295,7 +310,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final data = generator(entries);
     if (method == 'clipboard') {
       copyAndScheduleClear(data, autoClearEnabled: _clipboardAutoClear);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${entries.length}件を${formatName}形式でコピーしました${_clipboardAutoClear ? "\n30秒後にクリップボードをクリアします" : ""}')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(KuraudoLocalizations.isEnglish(context)
+          ? '${entries.length} entries were copied in $formatName format${_clipboardAutoClear ? "\nThe clipboard will be cleared in 30 seconds" : ""}'
+          : '${entries.length}件を${formatName}形式でコピーしました${_clipboardAutoClear ? "\n30秒後にクリップボードをクリアします" : ""}')));
     } else {
       final dir = await _getExportDir();
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
@@ -304,10 +321,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         // 自動削除オプション付きで通知
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${entries.length}件を${formatName}にエクスポート:\n$path'),
+          content: Text(KuraudoLocalizations.isEnglish(context)
+              ? '${entries.length} entries exported as $formatName:\n$path'
+              : '${entries.length}件を${formatName}にエクスポート:\n$path'),
           duration: const Duration(seconds: 10),
           action: SnackBarAction(
-            label: 'ファイルを削除',
+            label: 'ファイルを削除'.l10n(context),
             onPressed: () async {
               try {
                 await File(path).delete();
@@ -382,7 +401,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       Text(
-                        '$entryCount 件のエントリ',
+                        KuraudoLocalizations.isEnglish(context)
+                            ? '$entryCount entries'
+                            : '$entryCount 件のエントリ',
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurfaceVariant,
@@ -420,6 +441,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       setState(() => _themeMode = v);
                       widget.onThemeModeChanged(v);
                     }
+                  },
+                ),
+              ]),
+            ),
+          ),
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(children: [
+                const Icon(Icons.language_rounded, size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('言語', style: TextStyle(fontSize: 14)),
+                ),
+                DropdownButton<String>(
+                  value: _languageCode,
+                  underline: const SizedBox(),
+                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                  dropdownColor: cs.surfaceContainerHighest,
+                  items: const [
+                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _languageCode = value);
+                    KuraudoLocaleController.change(value);
                   },
                 ),
               ]),
@@ -1030,7 +1079,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
               obscureText: _obscureCurrent,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: '現在のパスワード',
+                labelText: '現在のパスワード'.l10n(context),
                 prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -1050,7 +1099,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
               controller: _newCtrl,
               obscureText: _obscureNew,
               decoration: InputDecoration(
-                labelText: '新しいパスワード',
+                labelText: '新しいパスワード'.l10n(context),
                 prefixIcon: const Icon(Icons.key_rounded, size: 18),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -1068,9 +1117,9 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
             TextField(
               controller: _confirmCtrl,
               obscureText: _obscureNew,
-              decoration: const InputDecoration(
-                labelText: '新しいパスワード（確認）',
-                prefixIcon: Icon(Icons.key_rounded, size: 18),
+              decoration: InputDecoration(
+                labelText: '新しいパスワード（確認）'.l10n(context),
+                prefixIcon: const Icon(Icons.key_rounded, size: 18),
               ),
               onSubmitted: (_) => _submit(),
             ),

@@ -4,7 +4,8 @@
 /// パスワード生成器を内蔵
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/kuraudo_localizations.dart';
 import '../../core/password_generator.dart';
 import '../../models/vault_entry.dart';
 import '../../services/vault_service.dart';
@@ -221,10 +222,10 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── タイトル（必須）──
             TextFormField(
               controller: _titleCtrl,
-              decoration: const InputDecoration(
-                labelText: 'タイトル *',
-                hintText: 'サービス名',
-                prefixIcon: Icon(Icons.title_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'タイトル *'.l10n(context),
+                hintText: 'サービス名'.l10n(context),
+                prefixIcon: const Icon(Icons.title_rounded, size: 20),
               ),
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'タイトルは必須です' : null,
@@ -235,10 +236,10 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── ユーザー名 ──
             TextFormField(
               controller: _usernameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ユーザー名',
-                hintText: 'ログインID',
-                prefixIcon: Icon(Icons.person_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'ユーザー名'.l10n(context),
+                hintText: 'ログインID'.l10n(context),
+                prefixIcon: const Icon(Icons.person_rounded, size: 20),
               ),
               textInputAction: TextInputAction.next,
             ),
@@ -250,7 +251,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
               obscureText: _obscurePassword,
               onChanged: (_) => setState(() {}), // 強度表示を更新
               decoration: InputDecoration(
-                labelText: 'パスワード *',
+                labelText: 'パスワード *'.l10n(context),
                 prefixIcon: const Icon(Icons.key_rounded, size: 20),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -267,7 +268,7 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                      tooltip: 'パスワード生成',
+                      tooltip: 'パスワード生成'.l10n(context),
                       onPressed: _openPasswordGenerator,
                       style: IconButton.styleFrom(
                         foregroundColor: KuraudoTheme.accent,
@@ -313,9 +314,9 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── メール ──
             TextFormField(
               controller: _emailCtrl,
-              decoration: const InputDecoration(
-                labelText: 'メールアドレス',
-                prefixIcon: Icon(Icons.email_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'メールアドレス'.l10n(context),
+                prefixIcon: const Icon(Icons.email_rounded, size: 20),
               ),
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
@@ -339,13 +340,13 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             TextFormField(
               controller: _categoryCtrl,
               decoration: InputDecoration(
-                labelText: 'カテゴリ/フォルダ',
-                hintText: '既存フォルダから選択 or 新規入力',
+                labelText: 'カテゴリ/フォルダ'.l10n(context),
+                hintText: '既存フォルダから選択または新規入力'.l10n(context),
                 prefixIcon: const Icon(Icons.folder_rounded, size: 20),
                 suffixIcon: _existingCategories.isNotEmpty
                     ? PopupMenuButton<String>(
                         icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
-                        tooltip: '既存フォルダから選択',
+                        tooltip: '既存フォルダから選択'.l10n(context),
                         popUpAnimationStyle: AnimationStyle(duration: Duration.zero),
                         onSelected: (v) { _categoryCtrl.text = v; },
                         itemBuilder: (_) => _existingCategories.map((c) => PopupMenuItem(value: c, child: Row(children: [const Icon(Icons.folder_rounded, size: 16), const SizedBox(width: 8), Text(c)]))).toList(),
@@ -359,10 +360,10 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── タグ ──
             TextFormField(
               controller: _tagsCtrl,
-              decoration: const InputDecoration(
-                labelText: 'タグ',
-                hintText: 'カンマ区切りで入力',
-                prefixIcon: Icon(Icons.label_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'タグ'.l10n(context),
+                hintText: 'カンマ区切りで入力'.l10n(context),
+                prefixIcon: const Icon(Icons.label_rounded, size: 20),
               ),
               textInputAction: TextInputAction.next,
             ),
@@ -371,9 +372,9 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── メモ ──
             TextFormField(
               controller: _notesCtrl,
-              decoration: const InputDecoration(
-                labelText: 'メモ',
-                prefixIcon: Icon(Icons.notes_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'メモ'.l10n(context),
+                prefixIcon: const Icon(Icons.notes_rounded, size: 20),
                 alignLabelWithHint: true,
               ),
               maxLines: null,
@@ -386,10 +387,10 @@ class _EntryEditScreenState extends State<EntryEditScreen> {
             // ── TOTP シークレット ──
             TextFormField(
               controller: _totpCtrl,
-              decoration: const InputDecoration(
-                labelText: 'TOTP シークレット',
-                hintText: 'Base32キー or otpauth://...',
-                prefixIcon: Icon(Icons.security_rounded, size: 20),
+              decoration: InputDecoration(
+                labelText: 'TOTP シークレット'.l10n(context),
+                hintText: 'Base32キーまたはotpauth://...'.l10n(context),
+                prefixIcon: const Icon(Icons.security_rounded, size: 20),
               ),
               textInputAction: TextInputAction.done,
             ),
