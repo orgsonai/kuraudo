@@ -1,5 +1,5 @@
 /// Kuraudo エントリ詳細画面
-/// 
+///
 /// パスワード表示/非表示、コピー、履歴、編集、削除
 library;
 
@@ -63,14 +63,20 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   Future<void> _performAutoType() async {
     final autofill = AutofillService();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('3秒以内にブラウザに切り替えてください...'), duration: Duration(seconds: 3)),
+      const SnackBar(
+        content: Text('3秒以内にブラウザに切り替えてください...'),
+        duration: Duration(seconds: 3),
+      ),
     );
     // 3秒待ってからAutoType実行（ユーザーがブラウザに切り替える時間）
     await Future.delayed(const Duration(seconds: 3));
     final result = await autofill.autoType(_entry);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message), duration: const Duration(seconds: 3)),
+        SnackBar(
+          content: Text(result.message),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -156,9 +162,16 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_rounded, size: 18, color: KuraudoTheme.danger),
+                    Icon(
+                      Icons.delete_rounded,
+                      size: 18,
+                      color: KuraudoTheme.danger,
+                    ),
                     SizedBox(width: 8),
-                    Text('ゴミ箱に移動', style: TextStyle(color: KuraudoTheme.danger)),
+                    Text(
+                      'ゴミ箱に移動',
+                      style: TextStyle(color: KuraudoTheme.danger),
+                    ),
                   ],
                 ),
               ),
@@ -170,307 +183,357 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
           child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // ── ヘッダーカード ──
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: KuraudoTheme.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _entry.title.isNotEmpty
-                            ? _entry.title[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: KuraudoTheme.accent,
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── ヘッダーカード ──
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: KuraudoTheme.accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
                         ),
+                        child: Center(
+                          child: Text(
+                            _entry.title.isNotEmpty
+                                ? _entry.title[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: KuraudoTheme.accent,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _entry.title,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (_entry.category != null) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _entry.category!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ── フィールド一覧 ──
+              if (_entry.username.isNotEmpty)
+                _FieldTile(
+                  icon: Icons.person_rounded,
+                  label: 'ユーザー名',
+                  value: _entry.username,
+                  onCopy: () => _copyToClipboard(_entry.username, 'ユーザー名'),
+                ),
+
+              _FieldTile(
+                icon: Icons.key_rounded,
+                label: 'パスワード',
+                value: _showPassword ? _entry.password : '••••••••••••',
+                onCopy: () => _copyToClipboard(_entry.password, 'パスワード'),
+                trailing: IconButton(
+                  icon: Icon(
+                    _showPassword
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    size: 18,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showPassword = !_showPassword),
+                ),
+                isMonospace: _showPassword,
+              ),
+
+              if (_entry.email != null && _entry.email!.isNotEmpty)
+                _FieldTile(
+                  icon: Icons.email_rounded,
+                  label: 'メール',
+                  value: _entry.email!,
+                  onCopy: () => _copyToClipboard(_entry.email!, 'メール'),
+                ),
+
+              if (_entry.url != null && _entry.url!.isNotEmpty)
+                _FieldTile(
+                  icon: Icons.link_rounded,
+                  label: 'URL',
+                  value: _entry.url!,
+                  onCopy: () => _copyToClipboard(_entry.url!, 'URL'),
+                ),
+
+              // ── デスクトップ自動入力 ──
+              if (Platform.isLinux || Platform.isWindows) ...[
+                const SizedBox(height: 4),
+                Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 4,
+                  ),
+                  child: InkWell(
+                    onTap: _performAutoType,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: KuraudoTheme.accent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.keyboard_rounded,
+                              size: 18,
+                              color: KuraudoTheme.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '自動入力',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'ブラウザにユーザー名＋パスワードを入力',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.play_arrow_rounded,
+                            size: 20,
+                            color: KuraudoTheme.accent,
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
+                ),
+              ],
+
+              if (_entry.notes != null && _entry.notes!.isNotEmpty)
+                _FieldTile(
+                  icon: Icons.notes_rounded,
+                  label: 'メモ',
+                  value: _entry.notes!,
+                  onCopy: () => _copyToClipboard(_entry.notes!, 'メモ'),
+                  multiline: true,
+                  selectable: true,
+                ),
+
+              // ── TOTP ──
+              if (_entry.totp != null && _entry.totp!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                TotpDisplay(totpSecret: _entry.totp!),
+              ],
+
+              // ── タグ ──
+              if (_entry.tags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _entry.title,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (_entry.category != null) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _entry.category!,
-                              style: TextStyle(
-                                  fontSize: 11, color: cs.onSurfaceVariant),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // ── フィールド一覧 ──
-          if (_entry.username.isNotEmpty)
-            _FieldTile(
-              icon: Icons.person_rounded,
-              label: 'ユーザー名',
-              value: _entry.username,
-              onCopy: () => _copyToClipboard(_entry.username, 'ユーザー名'),
-            ),
-
-          _FieldTile(
-            icon: Icons.key_rounded,
-            label: 'パスワード',
-            value: _showPassword ? _entry.password : '••••••••••••',
-            onCopy: () => _copyToClipboard(_entry.password, 'パスワード'),
-            trailing: IconButton(
-              icon: Icon(
-                _showPassword
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                size: 18,
-              ),
-              onPressed: () =>
-                  setState(() => _showPassword = !_showPassword),
-            ),
-            isMonospace: _showPassword,
-          ),
-
-          if (_entry.email != null && _entry.email!.isNotEmpty)
-            _FieldTile(
-              icon: Icons.email_rounded,
-              label: 'メール',
-              value: _entry.email!,
-              onCopy: () => _copyToClipboard(_entry.email!, 'メール'),
-            ),
-
-          if (_entry.url != null && _entry.url!.isNotEmpty)
-            _FieldTile(
-              icon: Icons.link_rounded,
-              label: 'URL',
-              value: _entry.url!,
-              onCopy: () => _copyToClipboard(_entry.url!, 'URL'),
-            ),
-
-          // ── デスクトップ自動入力 ──
-          if (Platform.isLinux || Platform.isWindows) ...[
-            const SizedBox(height: 4),
-            Card(
-              margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-              child: InkWell(
-                onTap: _performAutoType,
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: KuraudoTheme.accent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.keyboard_rounded, size: 18, color: KuraudoTheme.accent),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('自動入力', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                        Text('ブラウザにユーザー名＋パスワードを入力', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      ],
-                    )),
-                    Icon(Icons.play_arrow_rounded, size: 20, color: KuraudoTheme.accent),
-                  ]),
-                ),
-              ),
-            ),
-          ],
-
-          if (_entry.notes != null && _entry.notes!.isNotEmpty)
-            _FieldTile(
-              icon: Icons.notes_rounded,
-              label: 'メモ',
-              value: _entry.notes!,
-              onCopy: () => _copyToClipboard(_entry.notes!, 'メモ'),
-              multiline: true,
-            ),
-
-          // ── TOTP ──
-          if (_entry.totp != null && _entry.totp!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            TotpDisplay(totpSecret: _entry.totp!),
-          ],
-
-          // ── タグ ──
-          if (_entry.tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'タグ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: _entry.tags
-                          .map((t) => Chip(
-                                label: Text(t),
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // ── パスワード履歴 ──
-          if (_entry.passwordHistory.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: Column(
-                children: [
-                  InkWell(
-                    onTap: () =>
-                        setState(() => _showHistory = !_showHistory),
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Icon(Icons.history_rounded,
-                              size: 18, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 8),
-                          Text(
-                            'パスワード履歴（${_entry.passwordHistory.length}件）',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            _showHistory
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 20,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_showHistory)
-                    ...List.generate(_entry.passwordHistory.length, (i) {
-                      final record = _entry.passwordHistory[i];
-                      final isVisible = _visibleHistoryPasswords.contains(i);
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          isVisible ? record.password : '••••••••',
+                          'タグ',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontFamily: 'monospace',
+                            fontSize: 12,
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        subtitle: Text(
-                          _formatDate(record.changedAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                          ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _entry.tags
+                              .map(
+                                (t) => Chip(
+                                  label: Text(t),
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              )
+                              .toList(),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                isVisible
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded,
-                                size: 16,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+
+              // ── パスワード履歴 ──
+              if (_entry.passwordHistory.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Card(
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: () =>
+                            setState(() => _showHistory = !_showHistory),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
                               ),
-                              onPressed: () => setState(() {
-                                if (isVisible) {
-                                  _visibleHistoryPasswords.remove(i);
-                                } else {
-                                  _visibleHistoryPasswords.add(i);
-                                }
-                              }),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.copy_rounded, size: 16),
-                              onPressed: () => _copyToClipboard(
-                                  record.password, '旧パスワード'),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Text(
+                                'パスワード履歴（${_entry.passwordHistory.length}件）',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                _showHistory
+                                    ? Icons.expand_less_rounded
+                                    : Icons.expand_more_rounded,
+                                size: 20,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    }),
-                ],
-              ),
-            ),
-          ],
+                      ),
+                      if (_showHistory)
+                        ...List.generate(_entry.passwordHistory.length, (i) {
+                          final record = _entry.passwordHistory[i];
+                          final isVisible = _visibleHistoryPasswords.contains(
+                            i,
+                          );
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              isVisible ? record.password : '••••••••',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontFamily: 'monospace',
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            subtitle: Text(
+                              _formatDate(record.changedAt),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    isVisible
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    size: 16,
+                                  ),
+                                  onPressed: () => setState(() {
+                                    if (isVisible) {
+                                      _visibleHistoryPasswords.remove(i);
+                                    } else {
+                                      _visibleHistoryPasswords.add(i);
+                                    }
+                                  }),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.copy_rounded,
+                                    size: 16,
+                                  ),
+                                  onPressed: () => _copyToClipboard(
+                                    record.password,
+                                    '旧パスワード',
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+              ],
 
-          // ── メタ情報 ──
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              '作成: ${_formatDate(_entry.createdAt)}\n'
-              '更新: ${_formatDate(_entry.updatedAt)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                fontFamily: 'monospace',
+              // ── メタ情報 ──
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '作成: ${_formatDate(_entry.createdAt)}\n'
+                  '更新: ${_formatDate(_entry.updatedAt)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                    fontFamily: 'monospace',
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 40),
+            ],
           ),
-          const SizedBox(height: 40),
-        ],
-      ),
         ),
       ),
     );
@@ -493,6 +556,7 @@ class _FieldTile extends StatelessWidget {
   final Widget? trailing;
   final bool isMonospace;
   final bool multiline;
+  final bool selectable;
 
   const _FieldTile({
     required this.icon,
@@ -502,6 +566,7 @@ class _FieldTile extends StatelessWidget {
     this.trailing,
     this.isMonospace = false,
     this.multiline = false,
+    this.selectable = false,
   });
 
   @override
@@ -536,16 +601,26 @@ class _FieldTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                fontFamily: isMonospace ? 'monospace' : null,
-                height: multiline ? 1.5 : null,
+            if (selectable)
+              SelectableText(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontFamily: isMonospace ? 'monospace' : null,
+                  height: multiline ? 1.5 : null,
+                ),
+              )
+            else
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontFamily: isMonospace ? 'monospace' : null,
+                  height: multiline ? 1.5 : null,
+                ),
+                maxLines: multiline ? null : 2,
+                overflow: multiline ? null : TextOverflow.ellipsis,
               ),
-              maxLines: multiline ? null : 2,
-              overflow: multiline ? null : TextOverflow.ellipsis,
-            ),
           ],
         ),
       ),

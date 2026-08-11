@@ -1,0 +1,16 @@
+pkgname=kuraudo
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Local-first password manager with optional cloud synchronization'
+arch=('@ARCH@')
+url='https://github.com/orgsonai/kuraudo'
+license=('GPL-3.0-only')
+depends=('gtk3' 'libsecret')
+options=('!debug')
+source=("kuraudo-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cp -r "$srcdir/kuraudo-$pkgver/opt" "$pkgdir/"
+  cp -r "$srcdir/kuraudo-$pkgver/usr" "$pkgdir/"
+}

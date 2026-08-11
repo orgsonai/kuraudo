@@ -1,0 +1,10 @@
+Package: kuraudo
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @ARCH@
+Depends: libgtk-3-0, libsecret-1-0
+Maintainer: Zero to Ship
+Homepage: https://github.com/orgsonai/kuraudo
+Description: Local-first password manager
+ Kuraudo stores an encrypted vault locally and supports optional synchronization.

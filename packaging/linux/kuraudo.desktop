@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Kuraudo
+Comment=Local-first password manager
+Exec=kuraudo
+Icon=kuraudo
+Categories=Utility;Security;
+Terminal=false
+StartupNotify=true

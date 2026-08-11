@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,6 +18,27 @@ import 'ui/screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 本アプリ本体（Kuraudo）の GPL-3.0 を showLicensePage 用に登録する。
+  // 依存パッケージのライセンスは自動収集されるが、アプリ本体は手動登録が必要。
+  LicenseRegistry.addLicense(() async* {
+    yield const LicenseEntryWithLineBreaks(
+      <String>['Kuraudo'],
+      'Kuraudo（蔵人）\n'
+      'Copyright (C) 2026 Zero to Ship Project\n\n'
+      'This program is free software: you can redistribute it and/or modify '
+      'it under the terms of the GNU General Public License as published by '
+      'the Free Software Foundation, either version 3 of the License, or '
+      '(at your option) any later version.\n\n'
+      'This program is distributed in the hope that it will be useful, '
+      'but WITHOUT ANY WARRANTY; without even the implied warranty of '
+      'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
+      'GNU General Public License for more details.\n\n'
+      'You should have received a copy of the GNU General Public License '
+      'along with this program. If not, see <https://www.gnu.org/licenses/>.',
+    );
+  });
+
   runApp(const KuraudoApp());
 }
 

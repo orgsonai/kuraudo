@@ -60,6 +60,29 @@ flutter build apk       # Android
 flutter build windows   # Windows（Windowsホスト + Visual Studio 2022 必要）
 ```
 
+#### Linuxパッケージ
+
+LinuxではAppImageに加え、各ディストリビューションのパッケージ管理でインストールできる形式を作成できます。
+
+```bash
+flutter build linux --release
+
+./build_linux_packages.sh deb   # Debian / Ubuntu (.deb)
+./build_linux_packages.sh rpm   # Fedora / RHEL系 (.rpm)
+./build_linux_packages.sh arch  # Arch Linux (.pkg.tar.zst)
+./build_linux_packages.sh all   # 3形式すべて
+```
+
+生成物は `dist/` に保存されます。作成には対応するツール（`dpkg-deb`、`rpmbuild`、`makepkg`）が必要です。
+
+```bash
+sudo apt install ./dist/kuraudo_*_amd64.deb       # Debian / Ubuntu
+sudo dnf install ./dist/kuraudo-*.x86_64.rpm      # Fedora / RHEL系
+sudo pacman -U ./dist/kuraudo-*.pkg.tar.zst       # Arch Linux
+```
+
+インストール後はアプリメニューまたは `kuraudo` コマンドから起動でき、削除も各パッケージ管理から行えます。
+
 #### 前提条件
 
 - Flutter SDK 3.16+

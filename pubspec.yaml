@@ -1,7 +1,7 @@
 name: kuraudo
 description: "Kuraudo（蔵人）- Google Drive同期型パスワードマネージャー"
 publish_to: 'none'
-version: 0.2.0+6
+version: 0.3.3+9
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -60,4 +60,3 @@ msix_config:
   logo_path: assets/icon.png
   capabilities: internetClient
   languages: ja-jp, en-us
-

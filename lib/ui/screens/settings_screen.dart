@@ -875,6 +875,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          _SettingsTile(
+            icon: Icons.description_outlined,
+            title: 'ライセンス',
+            subtitle: 'GPL-3.0 — オープンソースライセンス',
+            onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'Kuraudo',
+              applicationVersion: _appVersion,
+              applicationLegalese: '© 2026 Zero to Ship\nGPL-3.0',
+            ),
+          ),
 
           const SizedBox(height: 40),
         ],

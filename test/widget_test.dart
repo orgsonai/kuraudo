@@ -1,30 +1,32 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:kuraudo/main.dart';
+import 'package:kuraudo/models/vault_entry.dart';
+import 'package:kuraudo/services/vault_service.dart';
+import 'package:kuraudo/ui/screens/entry_detail_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('詳細画面のメモを範囲選択できる', (tester) async {
+    const notes = '必要な部分だけ選択してコピーするメモ';
+    final entry = VaultEntry(
+      uuid: 'test-entry',
+      title: 'テスト',
+      username: '',
+      password: 'password',
+      notes: notes,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EntryDetailScreen(
+          vaultService: VaultService(),
+          entry: entry,
+        ),
+      ),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final selectableMemo = find.byWidgetPredicate(
+      (widget) => widget is SelectableText && widget.data == notes,
+    );
+    expect(selectableMemo, findsOneWidget);
   });
 }

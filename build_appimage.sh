@@ -7,12 +7,32 @@
 set -e
 
 APP_NAME="Kuraudo"
-APP_VERSION="0.1.0"
+APP_VERSION="$(sed -n "s/^version: *['\"]\{0,1\}\([^+'\"]*\).*/\1/p" pubspec.yaml | head -n 1)"
 BUNDLE_DIR="build/linux/x64/release/bundle"
+
+if [ -z "$APP_VERSION" ]; then
+  echo "エラー: pubspec.yamlからバージョンを取得できません"
+  exit 1
+fi
 
 if [ ! -d "$BUNDLE_DIR" ]; then
   echo "エラー: $BUNDLE_DIR が見つかりません"
   echo "先に flutter build linux --release を実行してください"
+  exit 1
+fi
+
+BUNDLE_VERSION_FILE="$BUNDLE_DIR/data/flutter_assets/version.json"
+if [ ! -f "$BUNDLE_VERSION_FILE" ]; then
+  echo "エラー: ビルド済みバージョンを確認できません"
+  echo "flutter build linux --release を再実行してください"
+  exit 1
+fi
+BUNDLE_VERSION="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' "$BUNDLE_VERSION_FILE")"
+if [ "$BUNDLE_VERSION" != "$APP_VERSION" ]; then
+  echo "エラー: ビルド済みアプリのバージョンが古いです"
+  echo "  pubspec.yaml: $APP_VERSION"
+  echo "  Linuxバンドル: $BUNDLE_VERSION"
+  echo "flutter build linux --release を再実行してください"
   exit 1
 fi
 

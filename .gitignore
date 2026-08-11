@@ -112,6 +112,7 @@ x86/
 appimagetool
 *.AppImage
 *.AppDir/
+/dist/
 
 # OS / editor junk
 **/.comments/
