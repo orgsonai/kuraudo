@@ -77,6 +77,8 @@ void main() {
               l10n.Text('Base32キーまたはotpauth://...'),
               l10n.Text('バックグラウンド移行後、指定時間が経過するとVaultを自動ロックします'),
               l10n.Text('エクスポートデータには平文のパスワードが含まれます。\nマスターパスワードを入力して確認してください。'),
+              l10n.Text(
+                  '同じVaultを同期するすべての端末で、同じマスターパスワードを使用してください。マスターパスワードが異なる場合は同期できません。'),
             ],
           ),
         ),
@@ -84,10 +86,21 @@ void main() {
     );
 
     expect(find.text('Master password'), findsOneWidget);
-    expect(find.text('Choose an existing folder or enter a new one'), findsOneWidget);
+    expect(find.text('Choose an existing folder or enter a new one'),
+        findsOneWidget);
     expect(find.text('Base32 key or otpauth://...'), findsOneWidget);
-    expect(find.text('Automatically locks the vault after the selected background time.'), findsOneWidget);
-    expect(find.text('Exported data contains passwords in plain text.\nEnter your master password to continue.'), findsOneWidget);
+    expect(
+        find.text(
+            'Automatically locks the vault after the selected background time.'),
+        findsOneWidget);
+    expect(
+        find.text(
+            'Exported data contains passwords in plain text.\nEnter your master password to continue.'),
+        findsOneWidget);
+    expect(
+        find.text(
+            'Use the same master password on every device that syncs this vault. Syncing is not possible when the master passwords differ.'),
+        findsOneWidget);
   });
 
   testWidgets('設定画面で英語を選択できる', (tester) async {

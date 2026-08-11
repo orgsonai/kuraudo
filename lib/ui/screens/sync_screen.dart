@@ -53,9 +53,12 @@ class _SyncScreenState extends State<SyncScreen> {
   /// 現在のバックエンド種別に応じた実体を返す（毎回解決）
   SyncBackend get _currentBackend {
     switch (_currentKind) {
-      case SyncBackendKind.googleDrive: return widget.googleDriveBackend;
-      case SyncBackendKind.webdav: return widget.webdavBackend;
-      case SyncBackendKind.localPath: return widget.localPathBackend;
+      case SyncBackendKind.googleDrive:
+        return widget.googleDriveBackend;
+      case SyncBackendKind.webdav:
+        return widget.webdavBackend;
+      case SyncBackendKind.localPath:
+        return widget.localPathBackend;
     }
   }
 
@@ -93,7 +96,7 @@ class _SyncScreenState extends State<SyncScreen> {
         success = await widget.googleDriveBackend.signIn();
         message = success
             ? 'サインインしました: ${widget.googleDriveBackend.accountEmail}'
-            : 'サインインに失敗しました';
+            : 'サインインに失敗しました${widget.googleDriveBackend.lastAuthError == null ? '' : ': ${widget.googleDriveBackend.lastAuthError}'}';
         break;
       case SyncBackendKind.webdav:
         if (!mounted) break;
@@ -114,7 +117,9 @@ class _SyncScreenState extends State<SyncScreen> {
   }
 
   Future<void> _disconnect() async {
-    final confirm = await _confirmDialog('切断', '現在のバックエンドから切断します。\n認証情報がクリアされます。実行しますか？', isDangerous: true);
+    final confirm = await _confirmDialog(
+        '切断', '現在のバックエンドから切断します。\n認証情報がクリアされます。実行しますか？',
+        isDangerous: true);
     if (confirm != true) return;
     await _currentBackend.disconnect();
     setState(() {
@@ -145,7 +150,8 @@ class _SyncScreenState extends State<SyncScreen> {
                   controller: urlCtrl,
                   decoration: InputDecoration(
                     labelText: 'サーバーURL'.l10n(context),
-                    hintText: 'https://nextcloud.example.com/remote.php/dav/files/user/',
+                    hintText:
+                        'https://nextcloud.example.com/remote.php/dav/files/user/',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -162,15 +168,20 @@ class _SyncScreenState extends State<SyncScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: pathCtrl,
-                  decoration: InputDecoration(labelText: 'リモートパス（オプション）'.l10n(context)),
+                  decoration:
+                      InputDecoration(labelText: 'リモートパス（オプション）'.l10n(context)),
                 ),
               ],
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('接続')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('キャンセル')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('接続')),
         ],
       ),
     );
@@ -190,7 +201,8 @@ class _SyncScreenState extends State<SyncScreen> {
       final agreed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.warning_amber_rounded, size: 32, color: Colors.orange),
+          icon: const Icon(Icons.warning_amber_rounded,
+              size: 32, color: Colors.orange),
           title: const Text('HTTP接続は安全ではありません'),
           content: const Text(
             'HTTP（暗号化なし）での接続を選択しました。\n\n'
@@ -209,7 +221,8 @@ class _SyncScreenState extends State<SyncScreen> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('リスクを承知で続行', style: TextStyle(color: Colors.orange)),
+              child: const Text('リスクを承知で続行',
+                  style: TextStyle(color: Colors.orange)),
             ),
           ],
         ),
@@ -297,57 +310,118 @@ class _SyncScreenState extends State<SyncScreen> {
 
   // ── 同期操作 ──
 
-  Future<bool?> _confirmDialog(String title, String message, {bool isDangerous = false}) {
-    return showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(message, style: const TextStyle(fontSize: 13, height: 1.5)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
-        TextButton(onPressed: () => Navigator.pop(ctx, true), style: isDangerous ? TextButton.styleFrom(foregroundColor: KuraudoTheme.danger) : null, child: const Text('実行')),
-      ],
-    ));
+  Future<bool?> _confirmDialog(String title, String message,
+      {bool isDangerous = false}) {
+    return showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: Text(title),
+              content: Text(message,
+                  style: const TextStyle(fontSize: 13, height: 1.5)),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('キャンセル')),
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: isDangerous
+                        ? TextButton.styleFrom(
+                            foregroundColor: KuraudoTheme.danger)
+                        : null,
+                    child: const Text('実行')),
+              ],
+            ));
   }
 
   Future<void> _autoSync() async {
-    final confirm = await _confirmDialog('自動同期', 'リモートとローカルを比較して自動で同期します。\n実行しますか？');
+    final confirm =
+        await _confirmDialog('自動同期', 'リモートとローカルを比較して自動で同期します。\n実行しますか？');
     if (confirm != true) return;
-    setState(() { _isSyncing = true; _lastMessage = '同期中...'; });
+    setState(() {
+      _isSyncing = true;
+      _lastMessage = '同期中...';
+    });
     final result = await widget.syncManager.autoSync();
-    setState(() { _isSyncing = false; if (result != null) { _lastMessage = result.message; _lastAction = result.action; } else { _lastMessage = '同期をスキップしました'; } });
+    setState(() {
+      _isSyncing = false;
+      if (result != null) {
+        _lastMessage = result.message;
+        _lastAction = result.action;
+      } else {
+        _lastMessage = '同期をスキップしました';
+      }
+    });
   }
 
   Future<void> _forceUpload() async {
-    final confirm = await _confirmDialog('ローカル → リモート', 'ローカルのデータでリモートを上書きします。\n実行しますか？');
+    final confirm =
+        await _confirmDialog('ローカル → リモート', 'ローカルのデータでリモートを上書きします。\n実行しますか？');
     if (confirm != true) return;
-    setState(() { _isSyncing = true; _lastMessage = 'アップロード中...'; });
+    setState(() {
+      _isSyncing = true;
+      _lastMessage = 'アップロード中...';
+    });
     final result = await widget.syncManager.forceUpload();
-    setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
+    setState(() {
+      _isSyncing = false;
+      _lastMessage = result.message;
+      _lastAction = result.action;
+    });
   }
 
   Future<void> _forceDownload() async {
-    final confirm = await _confirmDialog('リモート → ローカル', 'リモートのデータでローカルを上書きします。\n現在のローカルデータは失われます。実行しますか？', isDangerous: true);
+    final confirm = await _confirmDialog(
+        'リモート → ローカル', 'リモートのデータでローカルを上書きします。\n現在のローカルデータは失われます。実行しますか？',
+        isDangerous: true);
     if (confirm != true) return;
-    setState(() { _isSyncing = true; _lastMessage = 'ダウンロード中...'; });
+    setState(() {
+      _isSyncing = true;
+      _lastMessage = 'ダウンロード中...';
+    });
     final result = await widget.syncManager.forceDownload();
-    setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
-    if (result.action == SyncAction.downloaded && mounted) { Navigator.pop(context, true); }
+    setState(() {
+      _isSyncing = false;
+      _lastMessage = result.message;
+      _lastAction = result.action;
+    });
+    if (result.action == SyncAction.downloaded && mounted) {
+      Navigator.pop(context, true);
+    }
   }
 
   Future<void> _mergeSync() async {
-    final confirm = await _confirmDialog('マージ同期', 'リモートとローカルをUUID単位で比較・統合します。\nデータ消失はありません。実行しますか？');
+    final confirm = await _confirmDialog(
+        'マージ同期', 'リモートとローカルをUUID単位で比較・統合します。\nデータ消失はありません。実行しますか？');
     if (confirm != true) return;
-    setState(() { _isSyncing = true; _lastMessage = 'マージ同期中...'; });
+    setState(() {
+      _isSyncing = true;
+      _lastMessage = 'マージ同期中...';
+    });
     final result = await widget.syncManager.mergeSync();
-    setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
-    if (result.action == SyncAction.downloaded && mounted) { Navigator.pop(context, true); }
+    setState(() {
+      _isSyncing = false;
+      _lastMessage = result.message;
+      _lastAction = result.action;
+    });
+    if (result.action == SyncAction.downloaded && mounted) {
+      Navigator.pop(context, true);
+    }
   }
 
   Future<void> _createBackup() async {
-    final confirm = await _confirmDialog('手動バックアップ', 'ローカルとリモートにバックアップを作成します。\n実行しますか？');
+    final confirm =
+        await _confirmDialog('手動バックアップ', 'ローカルとリモートにバックアップを作成します。\n実行しますか？');
     if (confirm != true) return;
-    setState(() { _isSyncing = true; _lastMessage = 'バックアップ作成中...'; });
+    setState(() {
+      _isSyncing = true;
+      _lastMessage = 'バックアップ作成中...';
+    });
     final result = await widget.syncManager.createManualBackup();
-    setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
+    setState(() {
+      _isSyncing = false;
+      _lastMessage = result.message;
+      _lastAction = result.action;
+    });
   }
 
   // ── バックアップ復元ダイアログ ──
@@ -357,85 +431,167 @@ class _SyncScreenState extends State<SyncScreen> {
     if (!mounted) return;
 
     final cs = Theme.of(context).colorScheme;
-    final cloudBackups = _currentBackend.isReady ? await _currentBackend.listBackups() : <SyncBackupEntry>[];
+    final cloudBackups = _currentBackend.isReady
+        ? await _currentBackend.listBackups()
+        : <SyncBackupEntry>[];
 
     if (!mounted) return;
 
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('バックアップからリストア'),
-      content: SizedBox(width: 400, height: 400, child: ListView(children: [
-        if (localBackups.isNotEmpty) ...[
-          Text('ローカル', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 4),
-          ...localBackups.map((f) {
-            final name = f.path.split('/').last;
-            return ListTile(
-              dense: true,
-              leading: const Icon(Icons.folder_rounded, size: 18),
-              title: Text(name, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-                  title: const Text('リストア確認'),
-                  content: Text('$nameからリストアしますか？\n現在のデータは上書きされます。'),
-                  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('キャンセル')), TextButton(onPressed: () => Navigator.pop(c, true), style: TextButton.styleFrom(foregroundColor: KuraudoTheme.warning), child: const Text('リストア'))],
-                ));
-                if (confirm == true) {
-                  setState(() { _isSyncing = true; _lastMessage = 'リストア中...'; });
-                  final result = await widget.syncManager.restoreFromLocalBackup(f.path);
-                  setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
-                  if (result.action == SyncAction.downloaded && mounted) Navigator.pop(context, true);
-                }
-              },
-            );
-          }),
-          const Divider(),
-        ],
-        if (cloudBackups.isNotEmpty) ...[
-          Text('リモート', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 4),
-          ...cloudBackups.map((f) {
-            final name = f.name;
-            return ListTile(
-              dense: true,
-              leading: const Icon(Icons.cloud_rounded, size: 18),
-              title: Text(name, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
-              subtitle: f.modifiedAt != null ? Text('${f.modifiedAt}', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)) : null,
-              onTap: () async {
-                Navigator.pop(ctx);
-                final confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-                  title: const Text('リストア確認'),
-                  content: Text('$nameからリストアしますか？\n現在のデータは上書きされます。'),
-                  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('キャンセル')), TextButton(onPressed: () => Navigator.pop(c, true), style: TextButton.styleFrom(foregroundColor: KuraudoTheme.warning), child: const Text('リストア'))],
-                ));
-                if (confirm == true && f.id.isNotEmpty) {
-                  setState(() { _isSyncing = true; _lastMessage = 'リモートからリストア中...'; });
-                  final result = await widget.syncManager.restoreFromCloudBackup(f.id);
-                  setState(() { _isSyncing = false; _lastMessage = result.message; _lastAction = result.action; });
-                  if (result.action == SyncAction.downloaded && mounted) Navigator.pop(context, true);
-                }
-              },
-            );
-          }),
-        ],
-        if (localBackups.isEmpty && cloudBackups.isEmpty)
-          Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('バックアップがありません', style: TextStyle(color: cs.onSurfaceVariant)))),
-      ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('閉じる'))],
-    ));
+    showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('バックアップからリストア'),
+              content: SizedBox(
+                  width: 400,
+                  height: 400,
+                  child: ListView(children: [
+                    if (localBackups.isNotEmpty) ...[
+                      Text('ローカル',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 4),
+                      ...localBackups.map((f) {
+                        final name = f.path.split('/').last;
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.folder_rounded, size: 18),
+                          title: Text(name,
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace')),
+                          onTap: () async {
+                            Navigator.pop(ctx);
+                            final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (c) => AlertDialog(
+                                      title: const Text('リストア確認'),
+                                      content: Text(
+                                          '$nameからリストアしますか？\n現在のデータは上書きされます。'),
+                                      actions: [
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(c, false),
+                                            child: const Text('キャンセル')),
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(c, true),
+                                            style: TextButton.styleFrom(
+                                                foregroundColor:
+                                                    KuraudoTheme.warning),
+                                            child: const Text('リストア'))
+                                      ],
+                                    ));
+                            if (confirm == true) {
+                              setState(() {
+                                _isSyncing = true;
+                                _lastMessage = 'リストア中...';
+                              });
+                              final result = await widget.syncManager
+                                  .restoreFromLocalBackup(f.path);
+                              setState(() {
+                                _isSyncing = false;
+                                _lastMessage = result.message;
+                                _lastAction = result.action;
+                              });
+                              if (result.action == SyncAction.downloaded &&
+                                  mounted) Navigator.pop(context, true);
+                            }
+                          },
+                        );
+                      }),
+                      const Divider(),
+                    ],
+                    if (cloudBackups.isNotEmpty) ...[
+                      Text('リモート',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 4),
+                      ...cloudBackups.map((f) {
+                        final name = f.name;
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.cloud_rounded, size: 18),
+                          title: Text(name,
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace')),
+                          subtitle: f.modifiedAt != null
+                              ? Text('${f.modifiedAt}',
+                                  style: TextStyle(
+                                      fontSize: 10, color: cs.onSurfaceVariant))
+                              : null,
+                          onTap: () async {
+                            Navigator.pop(ctx);
+                            final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (c) => AlertDialog(
+                                      title: const Text('リストア確認'),
+                                      content: Text(
+                                          '$nameからリストアしますか？\n現在のデータは上書きされます。'),
+                                      actions: [
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(c, false),
+                                            child: const Text('キャンセル')),
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(c, true),
+                                            style: TextButton.styleFrom(
+                                                foregroundColor:
+                                                    KuraudoTheme.warning),
+                                            child: const Text('リストア'))
+                                      ],
+                                    ));
+                            if (confirm == true && f.id.isNotEmpty) {
+                              setState(() {
+                                _isSyncing = true;
+                                _lastMessage = 'リモートからリストア中...';
+                              });
+                              final result = await widget.syncManager
+                                  .restoreFromCloudBackup(f.id);
+                              setState(() {
+                                _isSyncing = false;
+                                _lastMessage = result.message;
+                                _lastAction = result.action;
+                              });
+                              if (result.action == SyncAction.downloaded &&
+                                  mounted) Navigator.pop(context, true);
+                            }
+                          },
+                        );
+                      }),
+                    ],
+                    if (localBackups.isEmpty && cloudBackups.isEmpty)
+                      Center(
+                          child: Padding(
+                              padding: const EdgeInsets.all(40),
+                              child: Text('バックアップがありません',
+                                  style:
+                                      TextStyle(color: cs.onSurfaceVariant)))),
+                  ])),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('閉じる'))
+              ],
+            ));
   }
 
   // ── ステータス色/アイコン ──
 
   Color _statusColor() {
     if (_currentBackend.status == SyncStatus.error) return KuraudoTheme.danger;
-    if (_currentBackend.status == SyncStatus.success) return KuraudoTheme.accent;
+    if (_currentBackend.status == SyncStatus.success)
+      return KuraudoTheme.accent;
     return Theme.of(context).colorScheme.onSurfaceVariant;
   }
 
   IconData _statusIcon() {
     if (_currentBackend.status == SyncStatus.error) return Icons.error_rounded;
-    if (_currentBackend.status == SyncStatus.success) return Icons.check_circle_rounded;
+    if (_currentBackend.status == SyncStatus.success)
+      return Icons.check_circle_rounded;
     if (_currentBackend.status == SyncStatus.syncing) return Icons.sync_rounded;
     return Icons.info_rounded;
   }
@@ -480,7 +636,9 @@ class _SyncScreenState extends State<SyncScreen> {
                         ),
                         child: Icon(
                           _backendIcon(info.kind, isReady),
-                          color: isReady ? KuraudoTheme.accent : cs.onSurfaceVariant,
+                          color: isReady
+                              ? KuraudoTheme.accent
+                              : cs.onSurfaceVariant,
                           size: 24,
                         ),
                       ),
@@ -490,25 +648,36 @@ class _SyncScreenState extends State<SyncScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isReady ? '${info.displayName} 連携中' : '${info.displayName} 未接続',
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                              isReady
+                                  ? '${info.displayName} 連携中'
+                                  : '${info.displayName} 未接続',
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               isReady
-                                  ? _currentBackend.displayLabel ?? info.displayName
+                                  ? _currentBackend.displayLabel ??
+                                      info.displayName
                                   : _connectHint(info.kind),
-                              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                              style: TextStyle(
+                                  fontSize: 13, color: cs.onSurfaceVariant),
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (isReady) ...[
                               const SizedBox(height: 4),
                               Row(children: [
-                                Icon(Icons.schedule_rounded, size: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                                Icon(Icons.schedule_rounded,
+                                    size: 12,
+                                    color: cs.onSurfaceVariant
+                                        .withValues(alpha: 0.7)),
                                 const SizedBox(width: 4),
                                 Text(
                                   '最終同期: $_lastSyncTimeText',
-                                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: cs.onSurfaceVariant
+                                          .withValues(alpha: 0.7)),
                                 ),
                               ]),
                             ],
@@ -521,6 +690,42 @@ class _SyncScreenState extends State<SyncScreen> {
               ),
               const SizedBox(height: 8),
 
+              if (info.kind == SyncBackendKind.googleDrive) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: KuraudoTheme.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: KuraudoTheme.warning.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 20,
+                        color: KuraudoTheme.warning,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '同じVaultを同期するすべての端末で、同じマスターパスワードを使用してください。マスターパスワードが異なる場合は同期できません。'
+                              .l10n(context),
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.5,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
               // ── 接続/切断ボタン ──
               if (!isReady)
                 SizedBox(
@@ -528,29 +733,63 @@ class _SyncScreenState extends State<SyncScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isSyncing ? null : _connect,
                     icon: _isSyncing
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
                         : Icon(_connectIcon(info.kind), size: 18),
                     label: Text(_connectButtonLabel(info.kind)),
                   ),
                 )
               else ...[
-                _SyncActionTile(icon: Icons.sync_rounded, title: '自動同期', subtitle: 'タイムスタンプを比較して自動判定', onTap: _isSyncing ? null : _autoSync, isLoading: _isSyncing),
-                _SyncActionTile(icon: Icons.cloud_upload_rounded, title: 'ローカル → リモート', subtitle: '現在のデータをアップロード', onTap: _isSyncing ? null : _forceUpload),
-                _SyncActionTile(icon: Icons.cloud_download_rounded, title: 'リモート → ローカル', subtitle: 'リモートのデータでローカルを上書き', onTap: _isSyncing ? null : _forceDownload, isDangerous: true),
-                _SyncActionTile(icon: Icons.merge_rounded, title: 'マージ同期', subtitle: 'UUID単位で比較・統合（データ消失なし）', onTap: _isSyncing ? null : _mergeSync),
-
+                _SyncActionTile(
+                    icon: Icons.sync_rounded,
+                    title: '自動同期',
+                    subtitle: 'タイムスタンプを比較して自動判定',
+                    onTap: _isSyncing ? null : _autoSync,
+                    isLoading: _isSyncing),
+                _SyncActionTile(
+                    icon: Icons.cloud_upload_rounded,
+                    title: 'ローカル → リモート',
+                    subtitle: '現在のデータをアップロード',
+                    onTap: _isSyncing ? null : _forceUpload),
+                _SyncActionTile(
+                    icon: Icons.cloud_download_rounded,
+                    title: 'リモート → ローカル',
+                    subtitle: 'リモートのデータでローカルを上書き',
+                    onTap: _isSyncing ? null : _forceDownload,
+                    isDangerous: true),
+                _SyncActionTile(
+                    icon: Icons.merge_rounded,
+                    title: 'マージ同期',
+                    subtitle: 'UUID単位で比較・統合（データ消失なし）',
+                    onTap: _isSyncing ? null : _mergeSync),
                 const SizedBox(height: 16),
-                Text('バックアップ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 0.5)),
+                Text('バックアップ',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurfaceVariant,
+                        letterSpacing: 0.5)),
                 const SizedBox(height: 8),
-                _SyncActionTile(icon: Icons.backup_rounded, title: '手動バックアップ', subtitle: 'ローカル＋リモートに保存（最大3世代保持）', onTap: _isSyncing ? null : _createBackup),
-                _SyncActionTile(icon: Icons.restore_rounded, title: 'バックアップからリストア', subtitle: 'ローカル/リモートのバックアップを復元', onTap: _isSyncing ? null : _showRestoreDialog),
-
+                _SyncActionTile(
+                    icon: Icons.backup_rounded,
+                    title: '手動バックアップ',
+                    subtitle: 'ローカル＋リモートに保存（最大3世代保持）',
+                    onTap: _isSyncing ? null : _createBackup),
+                _SyncActionTile(
+                    icon: Icons.restore_rounded,
+                    title: 'バックアップからリストア',
+                    subtitle: 'ローカル/リモートのバックアップを復元',
+                    onTap: _isSyncing ? null : _showRestoreDialog),
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: _disconnect,
                   icon: const Icon(Icons.logout_rounded, size: 18),
                   label: const Text('切断'),
-                  style: OutlinedButton.styleFrom(foregroundColor: cs.onSurfaceVariant),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: cs.onSurfaceVariant),
                 ),
               ],
 
@@ -565,7 +804,10 @@ class _SyncScreenState extends State<SyncScreen> {
                   child: Row(children: [
                     Icon(_statusIcon(), size: 18, color: _statusColor()),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_lastMessage!, style: TextStyle(fontSize: 12, color: _statusColor()))),
+                    Expanded(
+                        child: Text(_lastMessage!,
+                            style: TextStyle(
+                                fontSize: 12, color: _statusColor()))),
                   ]),
                 ),
               ],
@@ -581,33 +823,45 @@ class _SyncScreenState extends State<SyncScreen> {
   IconData _backendIcon(SyncBackendKind kind, bool isReady) {
     if (!isReady) return Icons.cloud_off_rounded;
     switch (kind) {
-      case SyncBackendKind.googleDrive: return Icons.cloud_done_rounded;
-      case SyncBackendKind.webdav: return Icons.dns_rounded;
-      case SyncBackendKind.localPath: return Icons.folder_rounded;
+      case SyncBackendKind.googleDrive:
+        return Icons.cloud_done_rounded;
+      case SyncBackendKind.webdav:
+        return Icons.dns_rounded;
+      case SyncBackendKind.localPath:
+        return Icons.folder_rounded;
     }
   }
 
   IconData _connectIcon(SyncBackendKind kind) {
     switch (kind) {
-      case SyncBackendKind.googleDrive: return Icons.login_rounded;
-      case SyncBackendKind.webdav: return Icons.dns_rounded;
-      case SyncBackendKind.localPath: return Icons.folder_open_rounded;
+      case SyncBackendKind.googleDrive:
+        return Icons.login_rounded;
+      case SyncBackendKind.webdav:
+        return Icons.dns_rounded;
+      case SyncBackendKind.localPath:
+        return Icons.folder_open_rounded;
     }
   }
 
   String _connectButtonLabel(SyncBackendKind kind) {
     switch (kind) {
-      case SyncBackendKind.googleDrive: return 'Googleアカウントでサインイン';
-      case SyncBackendKind.webdav: return 'WebDAVサーバーに接続';
-      case SyncBackendKind.localPath: return '同期先フォルダを選択';
+      case SyncBackendKind.googleDrive:
+        return 'Googleアカウントでサインイン';
+      case SyncBackendKind.webdav:
+        return 'WebDAVサーバーに接続';
+      case SyncBackendKind.localPath:
+        return '同期先フォルダを選択';
     }
   }
 
   String _connectHint(SyncBackendKind kind) {
     switch (kind) {
-      case SyncBackendKind.googleDrive: return 'サインインして同期を有効化';
-      case SyncBackendKind.webdav: return 'サーバーURLとアカウントを設定';
-      case SyncBackendKind.localPath: return '同期先のフォルダを選択';
+      case SyncBackendKind.googleDrive:
+        return 'サインインして同期を有効化';
+      case SyncBackendKind.webdav:
+        return 'サーバーURLとアカウントを設定';
+      case SyncBackendKind.localPath:
+        return '同期先のフォルダを選択';
     }
   }
 }
@@ -639,10 +893,16 @@ class _SyncActionTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: isLoading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
             : Icon(icon, color: color),
-        title: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
-        subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        title: Text(title,
+            style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+        subtitle: Text(subtitle,
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         trailing: const Icon(Icons.chevron_right_rounded, size: 20),
         onTap: onTap,
       ),
@@ -672,11 +932,15 @@ class _BackendOption extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(
-        isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+        isSelected
+            ? Icons.radio_button_checked_rounded
+            : Icons.radio_button_unchecked_rounded,
         color: isSelected ? KuraudoTheme.accent : cs.onSurfaceVariant,
       ),
-      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(description, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+      title: Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(description,
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
       onTap: onTap,
     );
   }

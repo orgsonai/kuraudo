@@ -120,6 +120,8 @@ class KuraudoLocalizations {
     'サインインしてください': 'Please sign in',
     'Googleアカウントでサインイン': 'Sign in with Google',
     'Googleアカウントでクラウド同期': 'Cloud sync with your Google account',
+    '同じVaultを同期するすべての端末で、同じマスターパスワードを使用してください。マスターパスワードが異なる場合は同期できません。':
+        'Use the same master password on every device that syncs this vault. Syncing is not possible when the master passwords differ.',
     'WebDAVサーバーに接続': 'Connect to a WebDAV server',
     'WebDAV接続設定': 'WebDAV connection settings',
     'サーバーURL': 'Server URL',
@@ -178,8 +180,7 @@ class KuraudoLocalizations {
     '既存フォルダから選択': 'Choose an existing folder',
     'すべてのカテゴリ': 'All categories',
     'カテゴリ/フォルダ': 'Category/folder',
-    '既存フォルダから選択または新規入力':
-        'Choose an existing folder or enter a new one',
+    '既存フォルダから選択または新規入力': 'Choose an existing folder or enter a new one',
     'Base32キーまたはotpauth://...': 'Base32 key or otpauth://...',
     'カンマ区切りで入力': 'Separate with commas',
     'タイトルは必須です': 'Title is required',
@@ -305,14 +306,12 @@ class KuraudoLocalizations {
         'After auto-lock, PIN or biometrics can unlock the vault for this period.\nAfterward, the master password is required.',
     'バックグラウンド移行後、指定時間が経過するとVaultを自動ロックします':
         'Automatically locks the vault after the selected background time.',
-    'アプリ再起動越しに試行回数を保持':
-        'Keep the attempt count across app restarts',
+    'アプリ再起動越しに試行回数を保持': 'Keep the attempt count across app restarts',
     'ONにすると 5回失敗で5分→10分→30分→60分の段階的バックオフ。\n再起動しても試行回数がリセットされません。\nOFF（既定）: 5回失敗するとマスターパスワード入力に切替':
         'When enabled, every 5 failures triggers a progressive 5, 10, 30, then 60-minute lockout.\nThe attempt count is retained after restarting the app.\nWhen disabled (default), 5 failures switch to master-password entry.',
     '永続化されたPIN失敗カウンタとロックアウト時刻をクリアします。':
         'Clear the saved PIN failure count and lockout time.',
-    'PIN失敗カウンタをリセットしました':
-        'The PIN failure counter was reset',
+    'PIN失敗カウンタをリセットしました': 'The PIN failure counter was reset',
     'パスワードコピー後30秒で自動クリア。\nバックグラウンド移行時・アプリ終了時にも即座にクリア。\nLinux: xclip/xsel/wl-copy を自動検出してクリア。\nAndroid 13+ではキーボード履歴への保存を防止。\n※ KDE Klipperのクリップボード履歴も30秒後に自動削除。\n※ 一部のクリップボードマネージャーでは手動削除が必要です。':
         'Clears automatically 30 seconds after copying a password.\nAlso clears immediately when the app enters the background or exits.\nLinux: automatically detects xclip, xsel, or wl-copy.\nAndroid 13+: prevents saving to keyboard history.\nKDE Klipper history is also cleared after 30 seconds.\nSome clipboard managers may require manual deletion.',
     '解錠時の自動同期と保存時の自動アップロードを制御します（同期方式は同期画面の⇄から選択）':
@@ -327,19 +326,14 @@ class KuraudoLocalizations {
         'Encryption: Argon2id (KDF) + AES-256-GCM\nFile format: .kuraudo (custom binary)\nFramework: Flutter',
     'エクスポートデータには平文のパスワードが含まれます。\nマスターパスワードを入力して確認してください。':
         'Exported data contains passwords in plain text.\nEnter your master password to continue.',
-    'マスターパスワードが正しくありません':
-        'The master password is incorrect',
+    'マスターパスワードが正しくありません': 'The master password is incorrect',
     'マスターパスワードを変更しました': 'Master password changed',
-    '現在のパスワードを入力してください':
-        'Enter the current password',
-    '現在のパスワードが正しくありません':
-        'The current password is incorrect',
-    '新しいパスワードは8文字以上必要です':
-        'The new password must be at least 8 characters',
+    '現在のパスワードを入力してください': 'Enter the current password',
+    '現在のパスワードが正しくありません': 'The current password is incorrect',
+    '新しいパスワードは8文字以上必要です': 'The new password must be at least 8 characters',
     '新しいパスワードは現在のものと異なる必要があります':
         'The new password must differ from the current password',
-    '新しいパスワードが一致しません':
-        'The new passwords do not match',
+    '新しいパスワードが一致しません': 'The new passwords do not match',
     'GPL-3.0 — オープンソースライセンス': 'GPL-3.0 — Open-source license',
     'Google Drive同期型パスワードマネージャー\nZero to Ship プロジェクト':
         'Password manager with Google Drive sync\nZero to Ship project',

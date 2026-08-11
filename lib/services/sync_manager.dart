@@ -1,8 +1,8 @@
 /// Kuraudo 同期マネージャー
-/// 
+///
 /// VaultService と SyncBackend を統合し、
 /// ローカル・ファースト原則に基づくハイブリッド同期を実現
-/// 
+///
 /// v2.0: パスワード自動取得、スマート同期、バックアップ管理
 /// v3.0: SyncBackend抽象化（Google Drive / WebDAV / ローカルパスを切替可能）
 library;
@@ -33,6 +33,7 @@ class SyncEvent {
 /// 同期マネージャー
 class SyncManager {
   final VaultService vaultService;
+
   /// 現在のバックエンド（実行時に切り替え可能）
   SyncBackend backend;
   final Connectivity _connectivity = Connectivity();
@@ -60,6 +61,28 @@ class SyncManager {
   /// マスターパスワードを取得（VaultServiceから自動）
   String? get _masterPassword => vaultService.masterPassword;
 
+  /// クラウドに同名Vaultがある場合、現在のマスターパスワードで復号できるか確認する。
+  /// 別パスワードのVaultを誤って上書きしないため、アップロード前に必ず呼ぶ。
+  Future<bool> _remoteVaultIsCompatible() async {
+    final password = _masterPassword;
+    if (password == null) return false;
+    final remoteBytes = await backend.download();
+    if (remoteBytes == null) {
+      // エラー時のnullを「クラウドにファイルなし」と誤認して上書きしない。
+      return backend.status != SyncStatus.error;
+    }
+    try {
+      KuraudoFile().decode(remoteBytes, password);
+      return true;
+    } catch (_) {
+      _emit(SyncEvent(
+        status: SyncStatus.error,
+        message: 'クラウドVaultのマスターパスワードが一致しないため、上書きを中止しました',
+      ));
+      return false;
+    }
+  }
+
   // ── 自動同期（Vault解錠時に呼ばれる） ──
 
   /// ActiveVault名をbackendに反映
@@ -85,6 +108,12 @@ class SyncManager {
 
     final localBytes = await _readLocalFile();
     if (localBytes == null) return null;
+    if (!await _remoteVaultIsCompatible()) {
+      return SyncResult(
+        status: SyncStatus.error,
+        message: 'クラウドVaultのマスターパスワードが一致しません。同じパスワードを使用してください',
+      );
+    }
 
     final localModifiedAt = vaultService.vault?.updatedAt ?? DateTime.now();
 
@@ -102,32 +131,44 @@ class SyncManager {
       return mergeResult;
     }
 
-    _emit(SyncEvent(status: result.status, message: result.message, action: result.action));
+    _emit(SyncEvent(
+        status: result.status, message: result.message, action: result.action));
     return result;
   }
 
   // ── 手動アップロード ──
 
   Future<SyncResult> forceUpload() async {
-    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady)
+      return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     _syncVaultName();
+    if (!await _remoteVaultIsCompatible()) {
+      return SyncResult(
+        status: SyncStatus.error,
+        message: 'クラウドVaultのマスターパスワードが一致しないため、アップロードを中止しました',
+      );
+    }
     final localBytes = await _readLocalFile();
-    if (localBytes == null) return SyncResult(status: SyncStatus.error, message: 'ローカルファイルが見つかりません');
+    if (localBytes == null)
+      return SyncResult(status: SyncStatus.error, message: 'ローカルファイルが見つかりません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'アップロード中...'));
     final result = await backend.uploadAndRecord(localBytes);
-    _emit(SyncEvent(status: result.status, message: result.message, action: result.action));
+    _emit(SyncEvent(
+        status: result.status, message: result.message, action: result.action));
     return result;
   }
 
   // ── ダウンロード（パスワード不要） ──
 
   Future<SyncResult> forceDownload([String? masterPassword]) async {
-    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady)
+      return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     _syncVaultName();
 
     final pw = masterPassword ?? _masterPassword;
-    if (pw == null) return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
+    if (pw == null)
+      return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'ダウンロード中...'));
 
@@ -138,13 +179,22 @@ class SyncManager {
     }
 
     try {
-      final filePath = vaultService.filePath ?? await vaultService.defaultFilePath;
+      final filePath =
+          vaultService.filePath ?? await vaultService.defaultFilePath;
+      // ローカルファイルを置き換える前に復号可能であることを確認する。
+      KuraudoFile().decode(remoteBytes, pw);
       await File(filePath).writeAsBytes(remoteBytes);
       vaultService.lock();
       await vaultService.unlock(pw, filePath: filePath);
 
-      _emit(SyncEvent(status: SyncStatus.success, message: 'クラウドからダウンロードしました', action: SyncAction.downloaded));
-      return SyncResult(status: SyncStatus.success, message: 'クラウドからダウンロードしました', action: SyncAction.downloaded);
+      _emit(SyncEvent(
+          status: SyncStatus.success,
+          message: 'クラウドからダウンロードしました',
+          action: SyncAction.downloaded));
+      return SyncResult(
+          status: SyncStatus.success,
+          message: 'クラウドからダウンロードしました',
+          action: SyncAction.downloaded);
     } catch (e) {
       _emit(SyncEvent(status: SyncStatus.error, message: '復号に失敗しました'));
       return SyncResult(status: SyncStatus.error, message: '復号に失敗しました: $e');
@@ -157,6 +207,7 @@ class SyncManager {
     if (!backend.isReady) return;
     if (!await isOnline) return;
     _syncVaultName();
+    if (!await _remoteVaultIsCompatible()) return;
 
     final localBytes = await _readLocalFile();
     if (localBytes != null) {
@@ -171,7 +222,8 @@ class SyncManager {
   Future<void> _autoBackupIfNeeded(Uint8List fileBytes) async {
     try {
       final backups = await backend.listBackups();
-      final autoBackups = backups.where((f) => f.name.contains('auto_')).toList();
+      final autoBackups =
+          backups.where((f) => f.name.contains('auto_')).toList();
       if (autoBackups.isNotEmpty) {
         final latest = autoBackups.first.modifiedAt;
         if (latest != null && DateTime.now().difference(latest).inHours < 24) {
@@ -188,24 +240,35 @@ class SyncManager {
   // ── マージ同期（パスワード自動取得） ──
 
   Future<SyncResult> mergeSync([String? masterPassword]) async {
-    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
-    if (vaultService.state != VaultState.unlocked || vaultService.vault == null) {
-      return SyncResult(status: SyncStatus.error, message: 'Vaultがアンロックされていません');
+    if (!backend.isReady)
+      return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (vaultService.state != VaultState.unlocked ||
+        vaultService.vault == null) {
+      return SyncResult(
+          status: SyncStatus.error, message: 'Vaultがアンロックされていません');
     }
     _syncVaultName();
 
     final pw = masterPassword ?? _masterPassword;
-    if (pw == null) return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
+    if (pw == null)
+      return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'マージ同期中...'));
 
     final remoteBytes = await backend.download();
     if (remoteBytes == null) {
-      _emit(SyncEvent(status: SyncStatus.syncing, message: 'クラウドにデータなし、アップロード中...'));
+      _emit(SyncEvent(
+          status: SyncStatus.syncing, message: 'クラウドにデータなし、アップロード中...'));
       final localBytes = await _readLocalFile();
       if (localBytes != null) await backend.uploadAndRecord(localBytes);
-      _emit(SyncEvent(status: SyncStatus.success, message: 'ローカルデータをアップロードしました', action: SyncAction.uploaded));
-      return SyncResult(status: SyncStatus.success, message: 'ローカルデータをアップロードしました', action: SyncAction.uploaded);
+      _emit(SyncEvent(
+          status: SyncStatus.success,
+          message: 'ローカルデータをアップロードしました',
+          action: SyncAction.uploaded));
+      return SyncResult(
+          status: SyncStatus.success,
+          message: 'ローカルデータをアップロードしました',
+          action: SyncAction.uploaded);
     }
 
     try {
@@ -221,8 +284,14 @@ class SyncManager {
       if (localBytes != null) await backend.uploadAndRecord(localBytes);
 
       final msg = result.hasChanges ? 'マージ完了: $result' : '同期済み（変更なし）';
-      _emit(SyncEvent(status: SyncStatus.success, message: msg, action: result.hasChanges ? SyncAction.downloaded : SyncAction.none));
-      return SyncResult(status: SyncStatus.success, message: msg, action: result.hasChanges ? SyncAction.downloaded : SyncAction.none);
+      _emit(SyncEvent(
+          status: SyncStatus.success,
+          message: msg,
+          action: result.hasChanges ? SyncAction.downloaded : SyncAction.none));
+      return SyncResult(
+          status: SyncStatus.success,
+          message: msg,
+          action: result.hasChanges ? SyncAction.downloaded : SyncAction.none);
     } catch (e) {
       _emit(SyncEvent(status: SyncStatus.error, message: 'マージに失敗: $e'));
       return SyncResult(status: SyncStatus.error, message: 'マージに失敗しました: $e');
@@ -233,7 +302,8 @@ class SyncManager {
 
   Future<SyncResult> createManualBackup() async {
     final localBytes = await _readLocalFile();
-    if (localBytes == null) return SyncResult(status: SyncStatus.error, message: 'ローカルファイルが見つかりません');
+    if (localBytes == null)
+      return SyncResult(status: SyncStatus.error, message: 'ローカルファイルが見つかりません');
     _syncVaultName();
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'バックアップ作成中...'));
 
@@ -243,22 +313,31 @@ class SyncManager {
     // クラウドバックアップ（サインイン済みの場合のみ）
     String cloudMsg = '';
     if (backend.isReady) {
-      final cloudResult = await backend.createBackup(localBytes, label: 'manual');
+      final cloudResult =
+          await backend.createBackup(localBytes, label: 'manual');
       cloudMsg = '\nクラウド: ${cloudResult.message}';
     }
 
     final msg = 'ローカル: $localResult$cloudMsg';
-    _emit(SyncEvent(status: SyncStatus.success, message: msg, action: SyncAction.uploaded));
-    return SyncResult(status: SyncStatus.success, message: msg, action: SyncAction.uploaded);
+    _emit(SyncEvent(
+        status: SyncStatus.success, message: msg, action: SyncAction.uploaded));
+    return SyncResult(
+        status: SyncStatus.success, message: msg, action: SyncAction.uploaded);
   }
 
   /// ローカルバックアップを作成（ラベル別に最大3世代保持）
-  Future<String> _createLocalBackup(Uint8List fileBytes, {String label = 'manual'}) async {
+  Future<String> _createLocalBackup(Uint8List fileBytes,
+      {String label = 'manual'}) async {
     try {
       final dir = await _getBackupDir();
-      final vaultName = (vaultService.vault?.vaultName ?? 'Default').replaceAll(RegExp(r'[^\w\-]'), '_');
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
-      final backupPath = '${dir.path}/kuraudo_backup_${label}_${vaultName}_$timestamp.kuraudo';
+      final vaultName = (vaultService.vault?.vaultName ?? 'Default')
+          .replaceAll(RegExp(r'[^\w\-]'), '_');
+      final timestamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .substring(0, 19);
+      final backupPath =
+          '${dir.path}/kuraudo_backup_${label}_${vaultName}_$timestamp.kuraudo';
       await File(backupPath).writeAsBytes(fileBytes);
 
       // 古いバックアップを削除（このラベル＋Vault名の分のみ、3世代保持）
@@ -283,10 +362,15 @@ class SyncManager {
     return File(defaultPath).parent;
   }
 
-  Future<void> _pruneLocalBackups(Directory dir, String vaultName, String label) async {
+  Future<void> _pruneLocalBackups(
+      Directory dir, String vaultName, String label) async {
     try {
       final prefix = 'kuraudo_backup_${label}_${vaultName}_';
-      final files = await dir.list().where((e) => e is File && e.path.split('/').last.startsWith(prefix)).cast<File>().toList();
+      final files = await dir
+          .list()
+          .where((e) => e is File && e.path.split('/').last.startsWith(prefix))
+          .cast<File>()
+          .toList();
       files.sort((a, b) => b.path.compareTo(a.path)); // 新しい順
       if (files.length > 3) {
         for (int i = 3; i < files.length; i++) {
@@ -300,15 +384,20 @@ class SyncManager {
   Future<List<File>> listLocalBackups() async {
     try {
       final dir = await _getBackupDir();
-      final vaultName = (vaultService.vault?.vaultName ?? 'Default').replaceAll(RegExp(r'[^\w\-]'), '_');
+      final vaultName = (vaultService.vault?.vaultName ?? 'Default')
+          .replaceAll(RegExp(r'[^\w\-]'), '_');
       // auto_VaultName_ と manual_VaultName_ の両方を取得
-      final files = await dir.list().where((e) {
-        if (e is! File) return false;
-        final name = e.path.split('/').last;
-        return name.startsWith('kuraudo_backup_manual_${vaultName}_') ||
-               name.startsWith('kuraudo_backup_auto_${vaultName}_') ||
-               name.startsWith('kuraudo_backup_${vaultName}_'); // 旧形式互換
-      }).cast<File>().toList();
+      final files = await dir
+          .list()
+          .where((e) {
+            if (e is! File) return false;
+            final name = e.path.split('/').last;
+            return name.startsWith('kuraudo_backup_manual_${vaultName}_') ||
+                name.startsWith('kuraudo_backup_auto_${vaultName}_') ||
+                name.startsWith('kuraudo_backup_${vaultName}_'); // 旧形式互換
+          })
+          .cast<File>()
+          .toList();
       files.sort((a, b) => b.path.compareTo(a.path));
       return files;
     } catch (_) {
@@ -319,17 +408,25 @@ class SyncManager {
   /// ローカルバックアップからリストア
   Future<SyncResult> restoreFromLocalBackup(String backupPath) async {
     final pw = _masterPassword;
-    if (pw == null) return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
+    if (pw == null)
+      return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
 
     _emit(SyncEvent(status: SyncStatus.syncing, message: 'リストア中...'));
     try {
       final backupBytes = await File(backupPath).readAsBytes();
-      final filePath = vaultService.filePath ?? await vaultService.defaultFilePath;
+      final filePath =
+          vaultService.filePath ?? await vaultService.defaultFilePath;
       await File(filePath).writeAsBytes(backupBytes);
       vaultService.lock();
       await vaultService.unlock(pw, filePath: filePath);
-      _emit(SyncEvent(status: SyncStatus.success, message: 'バックアップからリストアしました', action: SyncAction.downloaded));
-      return SyncResult(status: SyncStatus.success, message: 'バックアップからリストアしました', action: SyncAction.downloaded);
+      _emit(SyncEvent(
+          status: SyncStatus.success,
+          message: 'バックアップからリストアしました',
+          action: SyncAction.downloaded));
+      return SyncResult(
+          status: SyncStatus.success,
+          message: 'バックアップからリストアしました',
+          action: SyncAction.downloaded);
     } catch (e) {
       _emit(SyncEvent(status: SyncStatus.error, message: 'リストア失敗: $e'));
       return SyncResult(status: SyncStatus.error, message: 'リストア失敗: $e');
@@ -338,20 +435,31 @@ class SyncManager {
 
   /// クラウドバックアップからリストア
   Future<SyncResult> restoreFromCloudBackup(String fileId) async {
-    if (!backend.isReady) return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
+    if (!backend.isReady)
+      return SyncResult(status: SyncStatus.notSignedIn, message: 'サインインしてください');
     final pw = _masterPassword;
-    if (pw == null) return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
+    if (pw == null)
+      return SyncResult(status: SyncStatus.error, message: 'パスワードが取得できません');
 
-    _emit(SyncEvent(status: SyncStatus.syncing, message: 'クラウドバックアップからリストア中...'));
+    _emit(
+        SyncEvent(status: SyncStatus.syncing, message: 'クラウドバックアップからリストア中...'));
     try {
       final backupBytes = await backend.downloadBackup(fileId);
-      if (backupBytes == null) return SyncResult(status: SyncStatus.error, message: 'ダウンロード失敗');
-      final filePath = vaultService.filePath ?? await vaultService.defaultFilePath;
+      if (backupBytes == null)
+        return SyncResult(status: SyncStatus.error, message: 'ダウンロード失敗');
+      final filePath =
+          vaultService.filePath ?? await vaultService.defaultFilePath;
       await File(filePath).writeAsBytes(backupBytes);
       vaultService.lock();
       await vaultService.unlock(pw, filePath: filePath);
-      _emit(SyncEvent(status: SyncStatus.success, message: 'クラウドバックアップからリストアしました', action: SyncAction.downloaded));
-      return SyncResult(status: SyncStatus.success, message: 'クラウドバックアップからリストアしました', action: SyncAction.downloaded);
+      _emit(SyncEvent(
+          status: SyncStatus.success,
+          message: 'クラウドバックアップからリストアしました',
+          action: SyncAction.downloaded));
+      return SyncResult(
+          status: SyncStatus.success,
+          message: 'クラウドバックアップからリストアしました',
+          action: SyncAction.downloaded);
     } catch (e) {
       _emit(SyncEvent(status: SyncStatus.error, message: 'リストア失敗: $e'));
       return SyncResult(status: SyncStatus.error, message: 'リストア失敗: $e');
@@ -362,7 +470,8 @@ class SyncManager {
 
   Future<Uint8List?> _readLocalFile() async {
     try {
-      final filePath = vaultService.filePath ?? await vaultService.defaultFilePath;
+      final filePath =
+          vaultService.filePath ?? await vaultService.defaultFilePath;
       final file = File(filePath);
       if (await file.exists()) return await file.readAsBytes();
       return null;

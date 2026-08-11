@@ -54,7 +54,8 @@ class LockScreen extends StatefulWidget {
   State<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateMixin {
+class _LockScreenState extends State<LockScreen>
+    with SingleTickerProviderStateMixin {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   final _pathController = TextEditingController();
@@ -89,7 +90,8 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
+    _animController = AnimationController(
+        duration: const Duration(milliseconds: 600), vsync: this);
     _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
 
@@ -121,7 +123,8 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
       if (mounted) {
         setState(() {
           _pinFailCount = int.tryParse(failStr ?? '') ?? 0;
-          _pinLockUntil = lockUntilStr != null ? DateTime.tryParse(lockUntilStr) : null;
+          _pinLockUntil =
+              lockUntilStr != null ? DateTime.tryParse(lockUntilStr) : null;
         });
       }
     } catch (_) {}
@@ -140,7 +143,9 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
   void didUpdateWidget(covariant LockScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     // quickLocked状態に遷移した時に生体認証を自動トリガー
-    if (widget.quickLocked && widget.biometricEnabled && !oldWidget.quickLocked) {
+    if (widget.quickLocked &&
+        widget.biometricEnabled &&
+        !oldWidget.quickLocked) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
     }
     // quickLockedに遷移したらPIN入力をリセット
@@ -184,14 +189,16 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
 
   Future<void> _tryBiometric() async {
     try {
-      final canAuth = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
+      final canAuth = await _localAuth.canCheckBiometrics ||
+          await _localAuth.isDeviceSupported();
       if (!canAuth) {
         if (mounted) setState(() => _pinError = 'この端末は生体認証に対応していません');
         return;
       }
       final availableBio = await _localAuth.getAvailableBiometrics();
       if (availableBio.isEmpty) {
-        if (mounted) setState(() => _pinError = '生体認証が登録されていません。端末の設定で指紋/顔を登録してください');
+        if (mounted)
+          setState(() => _pinError = '生体認証が登録されていません。端末の設定で指紋/顔を登録してください');
         return;
       }
       final didAuth = await _localAuth.authenticate(
@@ -228,7 +235,8 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     if (widget.pinLockoutPersistent && _pinLockUntil != null) {
       if (DateTime.now().isBefore(_pinLockUntil!)) {
         final remainSec = _pinLockUntil!.difference(DateTime.now()).inSeconds;
-        final remainText = remainSec >= 60 ? '${(remainSec / 60).ceil()}分' : '${remainSec}秒';
+        final remainText =
+            remainSec >= 60 ? '${(remainSec / 60).ceil()}分' : '${remainSec}秒';
         setState(() {
           _pinError = 'PINロックアウト中です（あと$remainText）';
           _pinInput = '';
@@ -237,7 +245,9 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
       } else {
         // ロックアウト時間が過ぎた → 期限切れフラグをクリア
         _pinLockUntil = null;
-        try { await storage.delete(key: _kPinLockUntilKey); } catch (_) {}
+        try {
+          await storage.delete(key: _kPinLockUntilKey);
+        } catch (_) {}
       }
     }
 
@@ -268,17 +278,21 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
         if (widget.pinLockoutPersistent) {
           // 失敗回数を永続化
           try {
-            await storage.write(key: _kPinFailCountKey, value: _pinFailCount.toString());
+            await storage.write(
+                key: _kPinFailCountKey, value: _pinFailCount.toString());
           } catch (_) {}
 
           if (_pinFailCount >= _maxPinAttempts) {
             // 5回失敗ごとに段階的バックオフでロックアウト時間を計算
             // 5回目→5分, 10回目→10分, 15回目→30分, 20回目以降→60分
-            final stage = ((_pinFailCount - _maxPinAttempts) ~/ _maxPinAttempts).clamp(0, _lockoutMinutes.length - 1);
+            final stage = ((_pinFailCount - _maxPinAttempts) ~/ _maxPinAttempts)
+                .clamp(0, _lockoutMinutes.length - 1);
             final lockMinutes = _lockoutMinutes[stage];
             _pinLockUntil = DateTime.now().add(Duration(minutes: lockMinutes));
             try {
-              await storage.write(key: _kPinLockUntilKey, value: _pinLockUntil!.toIso8601String());
+              await storage.write(
+                  key: _kPinLockUntilKey,
+                  value: _pinLockUntil!.toIso8601String());
             } catch (_) {}
             setState(() {
               _pinError = 'PINを${_maxPinAttempts}回間違えました。$lockMinutes分間ロックされます';
@@ -308,7 +322,10 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
         }
       }
     } catch (_) {
-      setState(() { _pinError = '認証エラー'; _pinInput = ''; });
+      setState(() {
+        _pinError = '認証エラー';
+        _pinInput = '';
+      });
     }
   }
 
@@ -328,16 +345,23 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
       }
     }
 
-    // パス未指定時は明示的にエラー（OS既定領域への保存を防ぐ）
-    final path = _pathController.text.trim().isNotEmpty ? _pathController.text.trim() : null;
+    // 新規Vaultは空欄ならOS標準のDocumentsフォルダを使用する。
+    // 既存Vaultは対象ファイルを特定できないため、引き続き明示指定が必要。
+    final specifiedPath = _pathController.text.trim();
+    final path = specifiedPath.isNotEmpty
+        ? specifiedPath
+        : widget.isNewVault
+            ? await widget.vaultService.defaultFilePath
+            : null;
     if (path == null) {
-      setState(() => _errorMessage = widget.isNewVault
-          ? 'Vault の保存先を指定してください（フォルダアイコンから選択できます）'
-          : 'Vault ファイルを指定してください（フォルダアイコンから選択できます）');
+      setState(() => _errorMessage = 'Vault ファイルを指定してください（フォルダアイコンから選択できます）');
       return;
     }
 
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
       if (widget.isNewVault) {
@@ -356,14 +380,13 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
         _pinLockUntil = null;
       }
 
-      // パスを保存（必ずユーザー指定パスを使う）
+      // 実際に使用したパス（ユーザー指定またはOS既定）を保存
       widget.onVaultPathChanged(path);
       widget.onUnlocked();
     } catch (e) {
       setState(() {
-        _errorMessage = widget.isNewVault
-            ? 'Vault の作成に失敗しました: $e'
-            : 'アンロックに失敗しました: $e';
+        _errorMessage =
+            widget.isNewVault ? 'Vault の作成に失敗しました: $e' : 'アンロックに失敗しました: $e';
         _isLoading = false;
       });
     }
@@ -389,37 +412,56 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                     children: [
                       // ロゴ
                       Container(
-                        width: 80, height: 80,
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
                           color: KuraudoTheme.accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: KuraudoTheme.accent.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color:
+                                  KuraudoTheme.accent.withValues(alpha: 0.3)),
                         ),
-                        child: const Icon(Icons.lock_open_rounded, size: 40, color: KuraudoTheme.accent),
+                        child: const Icon(Icons.lock_open_rounded,
+                            size: 40, color: KuraudoTheme.accent),
                       ),
                       const SizedBox(height: 24),
-                      Text('ロック中', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                      Text('ロック中',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurface)),
                       const SizedBox(height: 8),
-                      Text('PIN または生体認証で解除', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+                      Text('PIN または生体認証で解除',
+                          style: TextStyle(
+                              fontSize: 13, color: cs.onSurfaceVariant)),
                       const SizedBox(height: 32),
 
                       // PIN入力ドット表示
                       if (widget.pinEnabled) ...[
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(4, (i) => Container(
-                            width: 18, height: 18,
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: i < _pinInput.length ? KuraudoTheme.accent : Colors.transparent,
-                              border: Border.all(color: KuraudoTheme.accent, width: 2),
-                            ),
-                          )),
+                          children: List.generate(
+                              4,
+                              (i) => Container(
+                                    width: 18,
+                                    height: 18,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: i < _pinInput.length
+                                          ? KuraudoTheme.accent
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                          color: KuraudoTheme.accent, width: 2),
+                                    ),
+                                  )),
                         ),
                         if (_pinError != null) ...[
                           const SizedBox(height: 8),
-                          Text(_pinError!, style: const TextStyle(fontSize: 12, color: KuraudoTheme.danger)),
+                          Text(_pinError!,
+                              style: const TextStyle(
+                                  fontSize: 12, color: KuraudoTheme.danger)),
                         ],
                         const SizedBox(height: 24),
 
@@ -427,27 +469,54 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                         SizedBox(
                           width: 280,
                           child: Column(children: [
-                            for (final row in [['1','2','3'], ['4','5','6'], ['7','8','9'], ['','0','⌫']])
-                              Row(mainAxisAlignment: MainAxisAlignment.center, children: row.map((key) {
-                                if (key.isEmpty) return const SizedBox(width: 76, height: 60);
-                                return SizedBox(width: 76, height: 60, child: InkWell(
-                                  borderRadius: BorderRadius.circular(30),
-                                  onTap: () {
-                                    setState(() { _pinError = null; });
-                                    if (key == '⌫') {
-                                      if (_pinInput.isNotEmpty) setState(() => _pinInput = _pinInput.substring(0, _pinInput.length - 1));
-                                    } else if (_pinInput.length < 4) {
-                                      _pinInput += key;
-                                      setState(() {});
-                                      if (_pinInput.length == 4) _verifyPin();
-                                    }
-                                  },
-                                  child: Center(child: key == '⌫'
-                                    ? Icon(Icons.backspace_rounded, size: 22, color: cs.onSurface)
-                                    : Text(key, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500, color: cs.onSurface)),
-                                  ),
-                                ));
-                              }).toList()),
+                            for (final row in [
+                              ['1', '2', '3'],
+                              ['4', '5', '6'],
+                              ['7', '8', '9'],
+                              ['', '0', '⌫']
+                            ])
+                              Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: row.map((key) {
+                                    if (key.isEmpty)
+                                      return const SizedBox(
+                                          width: 76, height: 60);
+                                    return SizedBox(
+                                        width: 76,
+                                        height: 60,
+                                        child: InkWell(
+                                          borderRadius:
+                                              BorderRadius.circular(30),
+                                          onTap: () {
+                                            setState(() {
+                                              _pinError = null;
+                                            });
+                                            if (key == '⌫') {
+                                              if (_pinInput.isNotEmpty)
+                                                setState(() => _pinInput =
+                                                    _pinInput.substring(0,
+                                                        _pinInput.length - 1));
+                                            } else if (_pinInput.length < 4) {
+                                              _pinInput += key;
+                                              setState(() {});
+                                              if (_pinInput.length == 4)
+                                                _verifyPin();
+                                            }
+                                          },
+                                          child: Center(
+                                            child: key == '⌫'
+                                                ? Icon(Icons.backspace_rounded,
+                                                    size: 22,
+                                                    color: cs.onSurface)
+                                                : Text(key,
+                                                    style: TextStyle(
+                                                        fontSize: 24,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: cs.onSurface)),
+                                          ),
+                                        ));
+                                  }).toList()),
                           ]),
                         ),
                         const SizedBox(height: 16),
@@ -460,7 +529,8 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                           icon: const Icon(Icons.fingerprint_rounded, size: 24),
                           label: const Text('生体認証で解除'),
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 14),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -472,7 +542,9 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                           widget.vaultService.lock();
                           widget.onForceFullLock?.call();
                         },
-                        child: Text('マスターパスワードで解除', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        child: Text('マスターパスワードで解除',
+                            style: TextStyle(
+                                fontSize: 12, color: cs.onSurfaceVariant)),
                       ),
                     ],
                   ),
@@ -499,42 +571,66 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                   children: [
                     // ロゴ
                     Container(
-                      width: 80, height: 80,
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
                         color: KuraudoTheme.accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: KuraudoTheme.accent.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: KuraudoTheme.accent.withValues(alpha: 0.3)),
                       ),
-                      child: const Icon(Icons.lock_rounded, size: 40, color: KuraudoTheme.accent),
+                      child: const Icon(Icons.lock_rounded,
+                          size: 40, color: KuraudoTheme.accent),
                     ),
                     const SizedBox(height: 24),
 
-                    Text('Kuraudo', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                    Text('Kuraudo',
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface)),
                     const SizedBox(height: 4),
-                    Text('蔵人', style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant)),
+                    Text('蔵人',
+                        style: TextStyle(
+                            fontSize: 14, color: cs.onSurfaceVariant)),
                     const SizedBox(height: 32),
 
                     // 新規/既存 切替
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _ModeChip(label: '既存Vault', selected: !widget.isNewVault, onTap: widget.onSwitchToExisting),
+                        _ModeChip(
+                            label: '既存Vault',
+                            selected: !widget.isNewVault,
+                            onTap: widget.onSwitchToExisting),
                         const SizedBox(width: 8),
-                        _ModeChip(label: '新規作成', selected: widget.isNewVault, onTap: widget.onSwitchToNew),
+                        _ModeChip(
+                            label: '新規作成',
+                            selected: widget.isNewVault,
+                            onTap: widget.onSwitchToNew),
                       ],
                     ),
                     const SizedBox(height: 20),
 
                     // ファイルパス設定
                     GestureDetector(
-                      onTap: () => setState(() => _showPathField = !_showPathField),
+                      onTap: () =>
+                          setState(() => _showPathField = !_showPathField),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.folder_open_rounded, size: 14, color: cs.onSurfaceVariant),
+                          Icon(Icons.folder_open_rounded,
+                              size: 14, color: cs.onSurfaceVariant),
                           const SizedBox(width: 4),
-                          Text('Vault場所を指定', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                          Icon(_showPathField ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: cs.onSurfaceVariant),
+                          Text('Vault場所を指定',
+                              style: TextStyle(
+                                  fontSize: 12, color: cs.onSurfaceVariant)),
+                          Icon(
+                              _showPathField
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
+                              size: 16,
+                              color: cs.onSurfaceVariant),
                         ],
                       ),
                     ),
@@ -543,20 +639,29 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                       TextField(
                         controller: _pathController,
                         decoration: InputDecoration(
-                          hintText: 'デフォルト: ~/Documents/kuraudo.kuraudo'.l10n(context),
+                          hintText: 'デフォルト: ~/Documents/kuraudo.kuraudo'
+                              .l10n(context),
                           labelText: 'ファイルパス'.l10n(context),
-                          prefixIcon: const Icon(Icons.folder_rounded, size: 18),
+                          prefixIcon:
+                              const Icon(Icons.folder_rounded, size: 18),
                           suffixIcon: IconButton(
-                            icon: const Icon(Icons.folder_open_rounded, size: 18),
+                            icon:
+                                const Icon(Icons.folder_open_rounded, size: 18),
                             tooltip: 'エクスプローラーで選択'.l10n(context),
                             onPressed: () => _showFileBrowser(context),
                           ),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          helperText: (widget.isNewVault ? '新規作成先（フォルダアイコンで選択可）' : '読み込むファイル（フォルダアイコンで選択可）').l10n(context),
-                          helperStyle: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          helperText: (widget.isNewVault
+                                  ? '新規作成先（フォルダアイコンで選択可）'
+                                  : '読み込むファイル（フォルダアイコンで選択可）')
+                              .l10n(context),
+                          helperStyle: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
                         ),
-                        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                        style: const TextStyle(
+                            fontSize: 13, fontFamily: 'monospace'),
                       ),
                     ],
                     const SizedBox(height: 20),
@@ -568,11 +673,18 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                       obscureText: _obscurePassword,
                       autofocus: true,
                       decoration: InputDecoration(
-                        labelText: (widget.isNewVault ? 'マスターパスワード（新規）' : 'マスターパスワード').l10n(context),
+                        labelText:
+                            (widget.isNewVault ? 'マスターパスワード（新規）' : 'マスターパスワード')
+                                .l10n(context),
                         prefixIcon: const Icon(Icons.key_rounded, size: 20),
                         suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 20),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_rounded
+                                  : Icons.visibility_off_rounded,
+                              size: 20),
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                       ),
                       onSubmitted: (_) => widget.isNewVault ? null : _submit(),
@@ -586,8 +698,13 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                           labelText: 'パスワードを確認'.l10n(context),
                           prefixIcon: const Icon(Icons.key_rounded, size: 20),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscureConfirm ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 20),
-                            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                            icon: Icon(
+                                _obscureConfirm
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                                size: 20),
+                            onPressed: () => setState(
+                                () => _obscureConfirm = !_obscureConfirm),
                           ),
                         ),
                         onSubmitted: (_) => _submit(),
@@ -603,30 +720,48 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                         decoration: BoxDecoration(
                           color: KuraudoTheme.danger.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: KuraudoTheme.danger.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color:
+                                  KuraudoTheme.danger.withValues(alpha: 0.3)),
                         ),
                         child: Row(children: [
-                          Icon(Icons.error_outline_rounded, size: 16, color: KuraudoTheme.danger),
+                          Icon(Icons.error_outline_rounded,
+                              size: 16, color: KuraudoTheme.danger),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(_errorMessage!, style: TextStyle(fontSize: 13, color: KuraudoTheme.danger))),
+                          Expanded(
+                              child: Text(_errorMessage!,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: KuraudoTheme.danger))),
                         ]),
                       ),
                     const SizedBox(height: 20),
 
                     // ボタン
                     SizedBox(
-                      width: double.infinity, height: 50,
+                      width: double.infinity,
+                      height: 50,
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _submit,
                         child: _isLoading
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                            : Text(widget.isNewVault ? 'Vault を作成' : 'アンロック', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : Text(widget.isNewVault ? 'Vault を作成' : 'アンロック',
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w600)),
                       ),
                     ),
                     const SizedBox(height: 16),
 
                     // バージョン
-                    Text(_appVersion, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5), fontFamily: 'monospace')),
+                    Text(_appVersion,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                            fontFamily: 'monospace')),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -640,8 +775,11 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
 }
 
 class _ModeChip extends StatelessWidget {
-  final String label; final bool selected; final VoidCallback onTap;
-  const _ModeChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeChip(
+      {required this.label, required this.selected, required this.onTap});
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -649,11 +787,22 @@ class _ModeChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? KuraudoTheme.accent.withValues(alpha: 0.1) : Colors.transparent,
+          color: selected
+              ? KuraudoTheme.accent.withValues(alpha: 0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? KuraudoTheme.accent : Theme.of(context).colorScheme.outline),
+          border: Border.all(
+              color: selected
+                  ? KuraudoTheme.accent
+                  : Theme.of(context).colorScheme.outline),
         ),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: selected ? FontWeight.w600 : FontWeight.w400, color: selected ? KuraudoTheme.accent : Theme.of(context).colorScheme.onSurfaceVariant)),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected
+                    ? KuraudoTheme.accent
+                    : Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
@@ -710,12 +859,22 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
       items.sort((a, b) {
         if (a is Directory && b is File) return -1;
         if (a is File && b is Directory) return 1;
-        return a.path.split(Platform.pathSeparator).last.toLowerCase()
+        return a.path
+            .split(Platform.pathSeparator)
+            .last
+            .toLowerCase()
             .compareTo(b.path.split(Platform.pathSeparator).last.toLowerCase());
       });
-      setState(() { _items = items; _isLoading = false; _selectedFile = null; });
+      setState(() {
+        _items = items;
+        _isLoading = false;
+        _selectedFile = null;
+      });
     } catch (e) {
-      setState(() { _items = []; _isLoading = false; });
+      setState(() {
+        _items = [];
+        _isLoading = false;
+      });
     }
   }
 
@@ -732,7 +891,9 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
   }
 
   String _shortPath(String path) {
-    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '';
     if (home.isNotEmpty && path.startsWith(home)) {
       return '~${path.substring(home.length)}';
     }
@@ -744,9 +905,11 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
     final cs = Theme.of(context).colorScheme;
     return AlertDialog(
       title: Row(children: [
-        const Icon(Icons.folder_open_rounded, size: 20, color: KuraudoTheme.accent),
+        const Icon(Icons.folder_open_rounded,
+            size: 20, color: KuraudoTheme.accent),
         const SizedBox(width: 8),
-        Text(widget.isNewVault ? '保存先を選択' : 'Vaultファイルを選択', style: const TextStyle(fontSize: 16)),
+        Text(widget.isNewVault ? '保存先を選択' : 'Vaultファイルを選択',
+            style: const TextStyle(fontSize: 16)),
       ]),
       content: SizedBox(
         width: 500,
@@ -768,9 +931,13 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
                 style: IconButton.styleFrom(padding: const EdgeInsets.all(4)),
               ),
               const SizedBox(width: 4),
-              Expanded(child: Text(
+              Expanded(
+                  child: Text(
                 _shortPath(_currentDir.path),
-                style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: cs.onSurfaceVariant),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: cs.onSurfaceVariant),
                 overflow: TextOverflow.ellipsis,
               )),
               IconButton(
@@ -786,19 +953,27 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
           // ファイルリスト
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: KuraudoTheme.accent))
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(color: KuraudoTheme.accent))
                 : _items.isEmpty
-                    ? Center(child: Text(
-                        widget.isNewVault ? 'このフォルダに保存できます' : '.kuraudoファイルがありません',
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                    ? Center(
+                        child: Text(
+                        widget.isNewVault
+                            ? 'このフォルダに保存できます'
+                            : '.kuraudoファイルがありません',
+                        style:
+                            TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                       ))
                     : ListView.builder(
                         itemCount: _items.length,
                         itemBuilder: (_, i) {
                           final item = _items[i];
-                          final name = item.path.split(Platform.pathSeparator).last;
+                          final name =
+                              item.path.split(Platform.pathSeparator).last;
                           final isDir = item is Directory;
-                          final isSelected = !isDir && _selectedFile == item.path;
+                          final isSelected =
+                              !isDir && _selectedFile == item.path;
                           return InkWell(
                             onTap: () {
                               if (isDir) {
@@ -815,24 +990,40 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
                               }
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              color: isSelected ? KuraudoTheme.accent.withValues(alpha: 0.1) : Colors.transparent,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              color: isSelected
+                                  ? KuraudoTheme.accent.withValues(alpha: 0.1)
+                                  : Colors.transparent,
                               child: Row(children: [
                                 Icon(
-                                  isDir ? Icons.folder_rounded : Icons.lock_rounded,
+                                  isDir
+                                      ? Icons.folder_rounded
+                                      : Icons.lock_rounded,
                                   size: 18,
-                                  color: isDir ? KuraudoTheme.warning : KuraudoTheme.accent,
+                                  color: isDir
+                                      ? KuraudoTheme.warning
+                                      : KuraudoTheme.accent,
                                 ),
                                 const SizedBox(width: 10),
-                                Expanded(child: Text(name, style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                  color: cs.onSurface,
-                                ), overflow: TextOverflow.ellipsis)),
-                                if (!isDir) Text(
-                                  _fileSize(item as File),
-                                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace'),
-                                ),
+                                Expanded(
+                                    child: Text(name,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: cs.onSurface,
+                                        ),
+                                        overflow: TextOverflow.ellipsis)),
+                                if (!isDir)
+                                  Text(
+                                    _fileSize(item as File),
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: cs.onSurfaceVariant,
+                                        fontFamily: 'monospace'),
+                                  ),
                               ]),
                             ),
                           );
@@ -846,11 +1037,14 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
               controller: _fileNameController,
               decoration: InputDecoration(
                 labelText: 'ファイル名'.l10n(context),
-                prefixIcon: const Icon(Icons.insert_drive_file_rounded, size: 18),
+                prefixIcon:
+                    const Icon(Icons.insert_drive_file_rounded, size: 18),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 helperText: '.kuraudo拡張子が自動付与されます'.l10n(context),
-                helperStyle: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                helperStyle:
+                    TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
               ),
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
             ),
@@ -868,7 +1062,8 @@ class _FileBrowserDialogState extends State<_FileBrowserDialog> {
               var name = _fileNameController.text.trim();
               if (name.isEmpty) name = 'kuraudo';
               if (!name.endsWith('.kuraudo')) name = '$name.kuraudo';
-              Navigator.pop(context, '${_currentDir.path}${Platform.pathSeparator}$name');
+              Navigator.pop(
+                  context, '${_currentDir.path}${Platform.pathSeparator}$name');
             } else if (_selectedFile != null) {
               Navigator.pop(context, _selectedFile);
             }
