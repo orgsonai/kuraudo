@@ -142,4 +142,68 @@ void main() {
     expect(selectedLanguage, 'en');
     l10n.KuraudoLocaleController.onLanguageChanged = null;
   });
+
+  Widget keyringUnavailableSettings({VoidCallback? onSecurityFallbackAccepted}) {
+    return MaterialApp(
+      locale: const Locale('ja'),
+      supportedLocales: const [Locale('ja'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: SettingsScreen(
+        vaultService: VaultService(),
+        keyringAvailable: false,
+        onSecurityFallbackAccepted: onSecurityFallbackAccepted,
+        onAutoLockChanged: (_) {},
+        onPasswordExpiryChanged: (_) {},
+        onThemeModeChanged: (_) {},
+        onAutoSyncChanged: (_) {},
+        onRealtimeSyncChanged: (_) {},
+        onClipboardAutoClearChanged: (_) {},
+        onPinEnabledChanged: (_) {},
+        onBiometricEnabledChanged: (_) {},
+        onPinThresholdChanged: (_) {},
+        onPinLockoutPersistentChanged: (_) {},
+      ),
+    );
+  }
+
+  testWidgets('キーリングが使えないときは案内を出してPINを無効にする', (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(keyringUnavailableSettings());
+    await tester.pump();
+
+    expect(find.text('OS のキーリングが使えません'), findsOneWidget);
+    // Switch の並び: PIN、クリップボード、自動同期、リアルタイム同期（テストでは生体認証は非表示）
+    final pinSwitch = tester.widget<Switch>(find.byType(Switch).first);
+    expect(pinSwitch.onChanged, isNull);
+  });
+
+  testWidgets('キーリングが使えないときは確認してから設定ファイルに保存する', (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    var acceptedCount = 0;
+    await tester.pumpWidget(keyringUnavailableSettings(
+      onSecurityFallbackAccepted: () => acceptedCount++,
+    ));
+    await tester.pump();
+
+    // クリップボード自動クリアを切り替えると確認ダイアログが出る
+    await tester.tap(find.byType(Switch).at(1));
+    await tester.pumpAndSettle();
+    expect(find.text('設定ファイルに保存しますか？'), findsOneWidget);
+
+    await tester.tap(find.text('設定ファイルに保存'));
+    await tester.pumpAndSettle();
+    expect(acceptedCount, 1);
+    expect(find.text('自動ロックとクリップボードの設定は設定ファイルに保存しています。'),
+        findsOneWidget);
+  });
 }

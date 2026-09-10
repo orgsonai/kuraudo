@@ -111,7 +111,7 @@ flutter run -d windows --release
 
 ### ファイル配置の確認
 
-設定ファイル・バックアップは**Vaultファイルと同じフォルダ**に作られます（v3.0以降）。`%APPDATA%\com.zerotoship.kuraudo\` などには何も書きません。Vaultパス情報のみ Windows Credential Manager に保存されます。
+設定ファイル・バックアップは**Vaultファイルと同じフォルダ**に作られます（v3.0以降）。前回開いたVaultのパスは `%APPDATA%\com.zerotoship\kuraudo\kuraudo_app_config.json` に保存されます（2026-09-10 以降。以前は Windows Credential Manager）。
 
 確認コマンド（PowerShell）:
 ```powershell

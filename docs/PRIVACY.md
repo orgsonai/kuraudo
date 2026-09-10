@@ -1,6 +1,6 @@
 # Privacy Policy / プライバシーポリシー
 
-**最終更新日: 2026年5月10日**
+**最終更新日: 2026年9月10日**
 
 ## 概要
 
@@ -16,7 +16,8 @@ Kuraudo（蔵人）は、ユーザーのプライバシーを最優先に設計�
 | 暗号化されたVaultファイル（同期時） | ユーザーが選択した同期先（Google Drive / WebDAVサーバー / ローカル指定パス）| ユーザーのみ |
 | マスターパスワード | どこにも保存されない | ユーザーのみ |
 | アプリの設定 | Vaultファイルと同じフォルダ（ユーザーの端末） | ユーザーのみ |
-| Vaultファイルパス情報 | OS のセキュアキーストア（Android Keystore / Linux Secret Service / Windows Credential Manager） | ユーザーのみ |
+| Vaultファイルパス情報 | 端末内のアプリ設定フォルダ（Linux の場合 `~/.local/share/com.zerotoship.kuraudo/`） | ユーザーのみ |
+| セキュリティ設定（自動ロック・PIN 等） | OS のセキュアキーストア（Android Keystore / Linux Secret Service / Windows Credential Manager）。キーストアが使えない端末では、ユーザーが同意した場合に限り自動ロックとクリップボードの設定のみ端末内のアプリ設定フォルダ | ユーザーのみ |
 | 同期先の認証情報（WebDAV/ローカルパス使用時）| OS のセキュアキーストア | ユーザーのみ |
 
 ## 収集しないデータ

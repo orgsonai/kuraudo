@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/vault_service.dart';
+import 'services/app_config_store.dart';
 import 'services/google_drive_service.dart';
 import 'services/sync_backend.dart';
 import 'services/local_path_backend.dart';
@@ -139,6 +140,9 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   bool _pinLockoutPersistent = false; // H-02: PIN試行回数の永続化（任意適用）
   bool _quickLocked = false;    // true=短時間ロック（PIN可）, false=通常ロック（マスターPW必須）
   final _secureStorage = const FlutterSecureStorage();
+  final _appConfig = AppConfigStore();
+  bool _keyringAvailable = true;          // OS のキーリング（SecureStorage）が使えるか。起動時に判定
+  bool _securityFallbackAccepted = false; // キーリングが無い環境で、セキュリティ設定のファイル保存に同意済みか
 
   // フォアグラウンド無操作監視用タイマー（30秒ごとに_checkAutoLockを呼ぶ）
   Timer? _idleTimer;
@@ -285,7 +289,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     _lastInteractionTime = DateTime.now();
   }
 
-  /// SecureStorageに保存するキー: 最後に使ったVaultのフルパス
+  /// 旧バージョンが SecureStorage に保存していたキー: 最後に使ったVaultのフルパス
+  /// 現在はアプリ設定ファイル（AppConfigStore）に保存し、起動時にそちらへ移す
   static const String _kVaultPathKey = 'vault_path';
 
   /// M-01: セキュリティ重要設定の SecureStorage キー（プレフィックス kuraudo_sec_）
@@ -296,6 +301,10 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   ///
   /// 非セキュリティ設定（themeMode, syncBackend 等）は従来通り
   /// kuraudo_settings.json に平文 JSON 保存する。
+  ///
+  /// キーリングが使えない環境では、設定画面の確認ダイアログでユーザーが同意した場合に限り
+  /// autoLockMinutes / clipboardAutoClear をアプリ設定ファイルに保存する。
+  /// PIN・生体認証はキーリング必須のため、その環境では無効にする。
   static const String _kSecAutoLockMinutes = 'kuraudo_sec_auto_lock_minutes';
   static const String _kSecClipboardAutoClear = 'kuraudo_sec_clipboard_auto_clear';
   static const String _kSecPinEnabled = 'kuraudo_sec_pin_enabled';
@@ -314,10 +323,11 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _loadSettings() async {
-    // 1. SecureStorageから前回のVaultパスを取得
-    try {
-      _lastVaultPath = await _secureStorage.read(key: _kVaultPathKey);
-    } catch (_) {}
+    // 1. アプリ設定ファイルから前回のVaultパスを取得
+    //    キーリングが無い環境でも残るよう、SecureStorage には保存しない
+    await _appConfig.load();
+    _lastVaultPath = _appConfig.vaultPath;
+    if (_lastVaultPath == null) await _migrateVaultPathFromSecureStorage();
 
     // 2. Vaultフォルダの設定ファイル（非セキュリティ項目）を読み込み
     final settingsPath = _settingsPath;
@@ -360,6 +370,18 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     _startIdleTimer();
   }
 
+  /// 旧バージョンが SecureStorage に保存した Vault パスをアプリ設定ファイルへ移す
+  Future<void> _migrateVaultPathFromSecureStorage() async {
+    try {
+      final legacyPath = await _secureStorage.read(key: _kVaultPathKey);
+      if (legacyPath == null) return;
+      _lastVaultPath = legacyPath;
+      if (await _appConfig.setVaultPath(legacyPath)) {
+        await _secureStorage.delete(key: _kVaultPathKey);
+      }
+    } catch (_) {}
+  }
+
   /// M-01: セキュリティ重要設定を SecureStorage から読み込む
   ///
   /// マイグレーション未実施の場合（旧バージョンからのアップデート）、
@@ -367,12 +389,15 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   /// それ以降は SecureStorage のみが信頼できるソースとなる。
   ///
   /// SecureStorage 読み込み失敗時は安全側の既定値を採用（ロックは有効、PINは無効など）。
+  /// ただし自動ロックとクリップボードは、ファイル保存に同意済みならその値を使う。
   Future<void> _loadSecuritySettings(Map<String, dynamic> legacyJson) async {
+    _securityFallbackAccepted = _appConfig.securityFallbackAccepted;
     try {
       final migrated = await _secureStorage.read(key: _kSecMigrationDone);
       if (migrated != 'true') {
         // 初回マイグレーション: 旧 JSON 値を SecureStorage へ移行
-        await _migrateSecuritySettings(legacyJson);
+        // キーリングが使えなかった間にファイルへ保存した値も移行元に含める
+        await _migrateSecuritySettings({...legacyJson, ..._appConfig.securitySettings});
       }
 
       // SecureStorage から読み込み（マイグレーション後はこれが信頼できるソース）
@@ -387,13 +412,20 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
       ) ?? 5;
       _pinLockoutPersistent = (await _secureStorage.read(key: _kSecPinLockoutPersistent)) == 'true';
     } catch (_) {
-      // SecureStorage 読み込み失敗時は安全側の既定値を採用
-      _autoLockMinutes = 5;
-      _clipboardAutoClear = true;
+      // キーリングが使えない（Linux で Secret Service が無い・開けない等）
+      _keyringAvailable = false;
       _pinEnabled = false;
       _biometricEnabled = false;
       _pinThresholdMinutes = 5;
       _pinLockoutPersistent = false;
+      // 自動ロック・クリップボードは、同意済みならファイルの値、未同意なら安全側の既定値
+      final saved = _securityFallbackAccepted
+          ? _appConfig.securitySettings
+          : const <String, dynamic>{};
+      final autoLock = saved['autoLockMinutes'];
+      final clipboardAutoClear = saved['clipboardAutoClear'];
+      _autoLockMinutes = autoLock is int ? autoLock : 5;
+      _clipboardAutoClear = clipboardAutoClear is bool ? clipboardAutoClear : true;
     }
   }
 
@@ -481,10 +513,29 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   ///
   /// [key] は _kSec* のいずれか。値は文字列化して書き込む。
   /// SecureStorage 書き込み失敗時は静かに無視する（次回操作で再試行される）。
+  /// キーリングが使えない環境では、同意済みの場合のみアプリ設定ファイルへ保存する。
   Future<void> _saveSecuritySetting(String key, dynamic value) async {
+    if (!_keyringAvailable) {
+      if (_securityFallbackAccepted) await _saveSecuritySettingsToFile();
+      return;
+    }
     try {
       await _secureStorage.write(key: key, value: value.toString());
     } catch (_) {}
+  }
+
+  /// キーリングが使えない環境で、自動ロックとクリップボードの設定をアプリ設定ファイルへ保存
+  Future<void> _saveSecuritySettingsToFile() async {
+    await _appConfig.saveSecuritySettings({
+      'autoLockMinutes': _autoLockMinutes,
+      'clipboardAutoClear': _clipboardAutoClear,
+    });
+  }
+
+  /// 設定画面の確認ダイアログで、セキュリティ設定のファイル保存に同意されたとき
+  void _onSecurityFallbackAccepted() {
+    setState(() => _securityFallbackAccepted = true);
+    _saveSecuritySettingsToFile();
   }
 
   /// バックエンドID文字列 ↔ enum の変換
@@ -533,10 +584,8 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
 
   Future<void> _onVaultPathChanged(String path) async {
     _lastVaultPath = path;
-    // SecureStorageに永続化（次回起動時にこのVaultを開く）
-    try {
-      await _secureStorage.write(key: _kVaultPathKey, value: path);
-    } catch (_) {}
+    // アプリ設定ファイルに永続化（次回起動時にこのVaultを開く）
+    await _appConfig.setVaultPath(path);
     // 新しいVaultフォルダに設定ファイルを作成/更新
     await _saveSettings();
   }
@@ -628,6 +677,9 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
           _saveSecuritySetting(_kSecPinLockoutPersistent, v);
         },
         secureStorage: _secureStorage,
+        keyringAvailable: _keyringAvailable,
+        securityFallbackAccepted: _securityFallbackAccepted,
+        onSecurityFallbackAccepted: _onSecurityFallbackAccepted,
       );
     }
 

@@ -44,6 +44,11 @@ class SettingsScreen extends StatefulWidget {
   final bool pinLockoutPersistent;
   final void Function(bool) onPinLockoutPersistentChanged;
   final FlutterSecureStorage? secureStorage;
+  // OS のキーリングが使えない環境向け。false のとき PIN・生体認証は保存できないため無効にし、
+  // 自動ロック・クリップボードは確認ダイアログで同意を得てから設定ファイルに保存する
+  final bool keyringAvailable;
+  final bool securityFallbackAccepted;
+  final VoidCallback? onSecurityFallbackAccepted;
 
   const SettingsScreen({
     super.key,
@@ -69,6 +74,9 @@ class SettingsScreen extends StatefulWidget {
     this.pinLockoutPersistent = false,
     required this.onPinLockoutPersistentChanged,
     this.secureStorage,
+    this.keyringAvailable = true,
+    this.securityFallbackAccepted = false,
+    this.onSecurityFallbackAccepted,
   });
 
   @override
@@ -90,6 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _biometricEnabled;
   late int _pinThresholdMinutes;
   late bool _pinLockoutPersistent; // H-02
+  late bool _securityFallbackAccepted;
   bool _biometricAvailable = false;
 
   String _appVersion = '';
@@ -107,6 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _biometricEnabled = widget.biometricEnabled;
     _pinThresholdMinutes = widget.pinThresholdMinutes;
     _pinLockoutPersistent = widget.pinLockoutPersistent;
+    _securityFallbackAccepted = widget.securityFallbackAccepted;
     _checkBiometric();
     _loadAppVersion();
   }
@@ -133,6 +143,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _biometricAvailable = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
       if (mounted) setState(() {});
     } catch (_) {}
+  }
+
+  /// キーリングが使えない環境で、自動ロック・クリップボードの設定を設定ファイルに保存してよいか確認する
+  ///
+  /// 平文の設定ファイルは書き換えられるおそれがあるため、同意を得るまでは保存しない。
+  /// 断られた場合、設定は再起動するまで有効で、次に変更したときに再度確認する。
+  Future<void> _confirmSecurityFallback() async {
+    if (widget.keyringAvailable || _securityFallbackAccepted) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('設定ファイルに保存しますか？'),
+        content: const Text(
+          'OS のキーリングが使えないため、この設定を安全な場所に保存できません。\n\n'
+          '設定ファイルに保存すると再起動後も残りますが、ファイルを書き換えられると設定が変わるおそれがあります。\n'
+          '保存しない場合、再起動すると元に戻ります。',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('保存しない')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('設定ファイルに保存')),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    widget.onSecurityFallbackAccepted?.call();
+    if (mounted) setState(() => _securityFallbackAccepted = true);
   }
 
   Future<String?> _showPinSetupDialog() async {
@@ -477,6 +514,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── セキュリティ ──
           _SectionHeader(title: 'セキュリティ'),
+          if (!widget.keyringAvailable)
+            Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.warning_amber_rounded, size: 20, color: KuraudoTheme.warning),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('OS のキーリングが使えません', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'PIN での解除は使えません。同期先の接続情報は再起動すると消えます。',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
+                    ),
+                    Text(
+                      _securityFallbackAccepted
+                          ? '自動ロックとクリップボードの設定は設定ファイルに保存しています。'
+                          : '自動ロックとクリップボードの設定は、変更するときに設定ファイルへ保存するか確認します。',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
+                    ),
+                    if (Platform.isLinux)
+                      Text(
+                        'KDE ウォレットや GNOME キーリングを有効にすると、すべて安全に保存できます。',
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
+                      ),
+                  ])),
+                ]),
+              ),
+            ),
           _SettingsTile(
             icon: Icons.key_rounded,
             title: 'マスターパスワードを変更',
@@ -511,6 +578,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (v != null) {
                         setState(() => _autoLockMinutes = v);
                         widget.onAutoLockChanged(v);
+                        _confirmSecurityFallback();
                       }
                     },
                   ),
@@ -559,7 +627,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Switch(
                     value: _pinEnabled,
                     activeColor: KuraudoTheme.accent,
-                    onChanged: (v) async {
+                    // PIN はキーリングに保存するため、キーリングが使えない環境では設定できない
+                    onChanged: !widget.keyringAvailable ? null : (v) async {
                       if (v) {
                         // PIN設定ダイアログ
                         final pin = await _showPinSetupDialog();
@@ -582,7 +651,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Switch(
                       value: _biometricEnabled,
                       activeColor: KuraudoTheme.accent,
-                      onChanged: (v) {
+                      onChanged: !widget.keyringAvailable ? null : (v) {
                         setState(() => _biometricEnabled = v);
                         widget.onBiometricEnabledChanged(v);
                       },
@@ -729,6 +798,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (v) {
                       setState(() => _clipboardAutoClear = v);
                       widget.onClipboardAutoClearChanged(v);
+                      _confirmSecurityFallback();
                     },
                   ),
                 ]),

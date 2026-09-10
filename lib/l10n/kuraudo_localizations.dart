@@ -337,6 +337,20 @@ class KuraudoLocalizations {
     'GPL-3.0 — オープンソースライセンス': 'GPL-3.0 — Open-source license',
     'Google Drive同期型パスワードマネージャー\nZero to Ship プロジェクト':
         'Password manager with Google Drive sync\nZero to Ship project',
+    'OS のキーリングが使えません': 'The OS keyring is unavailable',
+    'PIN での解除は使えません。同期先の接続情報は再起動すると消えます。':
+        'PIN unlock is unavailable. Sync connection details are lost when the app restarts.',
+    '自動ロックとクリップボードの設定は設定ファイルに保存しています。':
+        'Auto-lock and clipboard settings are saved in the settings file.',
+    '自動ロックとクリップボードの設定は、変更するときに設定ファイルへ保存するか確認します。':
+        'When you change auto-lock or clipboard settings, Kuraudo asks whether to save them in the settings file.',
+    'KDE ウォレットや GNOME キーリングを有効にすると、すべて安全に保存できます。':
+        'Enable KDE Wallet or GNOME Keyring to store everything securely.',
+    '設定ファイルに保存しますか？': 'Save to the settings file?',
+    'OS のキーリングが使えないため、この設定を安全な場所に保存できません。\n\n設定ファイルに保存すると再起動後も残りますが、ファイルを書き換えられると設定が変わるおそれがあります。\n保存しない場合、再起動すると元に戻ります。':
+        'This setting cannot be stored securely because the OS keyring is unavailable.\n\nIf you save it in the settings file, it stays after restarting, but anyone who can edit the file could change it.\nIf you do not save it, it resets when the app restarts.',
+    '保存しない': "Don't save",
+    '設定ファイルに保存': 'Save to settings file',
   };
 
   static const List<(String, String)> _phraseReplacements = [
