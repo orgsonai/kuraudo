@@ -6,7 +6,7 @@ arch=('@ARCH@')
 url='https://github.com/orgsonai/kuraudo'
 license=('GPL-3.0-only')
 depends=('gtk3' 'libsecret')
-options=('!debug')
+options=('!debug' '!strip')
 source=("kuraudo-$pkgver.tar.gz")
 sha256sums=('SKIP')
 

@@ -39,7 +39,20 @@
 （提出未着手 — Windows向けビルドは可能、`docs/windows-build-guide.md` 参照）
 
 ### GitHub Releases
-[Releases](https://github.com/orgsonai/kuraudo/releases) から各プラットフォーム向けのインストーラーをダウンロード。
+[Releases](https://github.com/orgsonai/kuraudo/releases) から各プラットフォーム向けのファイルをダウンロード。
+
+#### Linux（x86_64）
+
+Flutter のインストールやビルドは不要です。使っているディストリビューションに合うファイルを選んでください。
+
+| ディストリビューション | ファイル | インストール |
+|------|------|------|
+| Debian / Ubuntu 系 | `Kuraudo-<版>-linux-x86_64.deb` | `sudo apt install ./Kuraudo-*-linux-x86_64.deb` |
+| Fedora / RHEL 系 | `Kuraudo-<版>-linux-x86_64.rpm` | `sudo dnf install ./Kuraudo-*-linux-x86_64.rpm` |
+| Arch Linux 系 | `Kuraudo-<版>-linux-x86_64.pkg.tar.zst` | `sudo pacman -U ./Kuraudo-*-linux-x86_64.pkg.tar.zst` |
+| インストールせずに使う | `Kuraudo-<版>-linux-x86_64.AppImage` | `chmod +x ./Kuraudo-*-linux-x86_64.AppImage` で実行権限を付けて起動 |
+
+インストール後はアプリメニューまたは `kuraudo` コマンドから起動できます。PIN や同期のログイン情報を保存するには、KDE ウォレットや GNOME キーリングなど OS のキーリングが必要です。
 
 ### ビルド
 
@@ -82,6 +95,8 @@ sudo pacman -U ./dist/kuraudo-*.pkg.tar.zst       # Arch Linux
 ```
 
 インストール後はアプリメニューまたは `kuraudo` コマンドから起動でき、削除も各パッケージ管理から行えます。
+
+`v*` タグ（例: `v0.4.6`、`pubspec.yaml` の version と同じ版）を GitHub に push すると、`.github/workflows/linux-release.yml` が deb / rpm / Arch 用 / AppImage を作ってリリースに添付します。事前にリポジトリの Secrets へ `GOOGLE_CLIENT_SECRET` を登録してください。
 
 #### 前提条件
 

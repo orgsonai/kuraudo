@@ -1,3 +1,7 @@
+# ビルド済みの Flutter バイナリを詰めるだけなので、debuginfo 生成と strip 等の後処理はしない
+%global debug_package %{nil}
+%global __os_install_post %{nil}
+
 Name:           kuraudo
 Version:        @VERSION@
 Release:        1%{?dist}

@@ -3,7 +3,12 @@ cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
 # flutter_secure_storage_linux の deprecated 警告をエラーにしない
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-literal-operator")
+# 古い clang（CI の Ubuntu 22.04 等）はこの警告名を知らずエラーになるため、対応している場合だけ付ける
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-Wdeprecated-literal-operator" HAS_DEPRECATED_LITERAL_OPERATOR_WARNING)
+if(HAS_DEPRECATED_LITERAL_OPERATOR_WARNING)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-literal-operator")
+endif()
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.

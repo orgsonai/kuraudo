@@ -1,0 +1,193 @@
+# Linux 版を自動でビルドし、GitHub Releases に添付する
+#
+# 使い方:
+#   1. pubspec.yaml の version を上げてコミット
+#   2. 同じ版のタグ（例: v0.4.6）を GitHub に push
+#        git push github main && git push github v0.4.6
+#   3. deb / rpm / Arch 用 / AppImage が同じタグのリリースに添付される
+#      （リリースが無ければ下書きで作るので、Android / Windows 版を足してから公開する）
+#
+# 事前準備（1 回だけ）: リポジトリの Secrets に GOOGLE_CLIENT_SECRET を登録
+# 手動実行（Actions タブ → Run workflow）: tag を空にするとビルドだけ行う
+
+name: Linux release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '添付先のタグ（例: v0.4.6）。空ならビルドのみ'
+        required: false
+        default: ''
+
+env:
+  TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+
+jobs:
+  build:
+    name: Flutter ビルド・deb・AppImage
+    # 古い glibc の環境でビルドすると、新旧どちらのディストリでも動く
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - name: pubspec.yaml の版とタグの一致を確認
+        if: env.TAG != ''
+        run: |
+          version=$(sed -n "s/^version: *['\"]\{0,1\}\([^+'\"]*\).*/\1/p" pubspec.yaml | head -n 1)
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::pubspec.yaml の version ($version) とタグ ($TAG) が一致しません"
+            exit 1
+          fi
+
+      - name: GOOGLE_CLIENT_SECRET の登録を確認
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+            echo "::error::Secrets に GOOGLE_CLIENT_SECRET がありません。Google Drive 同期が使えない版になるため中止します"
+            exit 1
+          fi
+
+      - name: Linux ビルドに必要なパッケージを入れる
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.x # pubspec.lock が要求する版（>=3.38.4）に合わせる
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter test
+
+      - name: Linux 版をビルド
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: flutter build linux --release --dart-define=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
+
+      - name: deb を作る
+        run: bash build_linux_packages.sh deb
+
+      - name: AppImage を作る
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1 # CI には FUSE が無いため
+        run: |
+          bash build_appimage.sh
+          mv Kuraudo-*-x86_64.AppImage dist/
+
+      # upload-artifact は実行権限を保たないので tar にまとめて渡す
+      - name: rpm・Arch 用の作成ジョブへ渡すバンドルをまとめる
+        run: tar -C build/linux/x64/release -czf bundle.tar.gz bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: bundle.tar.gz
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-deb-appimage
+          path: dist/*
+
+  rpm:
+    name: rpm（Fedora で作成）
+    needs: build
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - run: dnf -y install rpm-build tar gzip
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+
+      - name: rpm を作る
+        run: |
+          mkdir -p build/linux/x64/release
+          tar -C build/linux/x64/release -xzf bundle.tar.gz
+          bash build_linux_packages.sh rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-rpm
+          path: dist/*.rpm
+
+  arch:
+    name: Arch 用（Arch Linux で作成）
+    needs: build
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # PKGBUILD の depends が入っていないと makepkg が止まるため gtk3 と libsecret も入れる
+      - run: pacman -Syu --noconfirm --needed base-devel gtk3 libsecret
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+
+      - name: Arch 用パッケージを作る（makepkg は root で動かないため一般ユーザーで実行）
+        run: |
+          mkdir -p build/linux/x64/release
+          tar -C build/linux/x64/release -xzf bundle.tar.gz
+          useradd -m builder
+          chown -R builder: .
+          su builder -c "bash build_linux_packages.sh arch"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-arch
+          path: dist/*.pkg.tar.*
+
+  release:
+    name: GitHub Releases に添付
+    needs: [build, rpm, arch]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: dist
+
+      - name: ファイル名を揃えてチェックサムを作る
+        run: |
+          version="${TAG#v}"
+          cd dist
+          mv kuraudo_*_amd64.deb "Kuraudo-${version}-linux-x86_64.deb"
+          mv kuraudo-*.x86_64.rpm "Kuraudo-${version}-linux-x86_64.rpm"
+          mv kuraudo-*-x86_64.pkg.tar.zst "Kuraudo-${version}-linux-x86_64.pkg.tar.zst"
+          mv Kuraudo-*-x86_64.AppImage "Kuraudo-${version}-linux-x86_64.AppImage"
+          sha256sum Kuraudo-*-linux-x86_64.* > "Kuraudo-${version}-linux-SHA256SUMS.txt"
+          ls -l
+
+      - name: リリースに添付
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "Kuraudo $TAG" \
+              --notes "Linux 版（deb / rpm / Arch / AppImage）は GitHub Actions で自動ビルドしています。"
+          fi
+          gh release upload "$TAG" dist/* --clobber
