@@ -62,7 +62,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.38.x # pubspec.lock が要求する版（>=3.38.4）に合わせる
+          flutter-version: 3.44.9 # PC の開発環境と同じ版に合わせる（pubspec.lock の要求は >=3.38.4）
           cache: true
 
       - run: flutter pub get
