@@ -72,6 +72,10 @@ jobs:
         shell: pwsh
         env:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          # local_auth_windows 1.0.11 が古い <experimental/coroutine> を使っており、
+          # 新しい MSVC の標準ライブラリが static assert（STL1011）で止めてしまう。
+          # プラグインの更新は影響が大きいので、コンパイラ側の環境変数 CL で抑止する
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: flutter build windows --release "--dart-define=GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET"
 
       - name: Inno Setup 6 を用意する（ランナーに無いときだけ入れる）
