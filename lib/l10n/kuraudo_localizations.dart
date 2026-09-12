@@ -338,8 +338,8 @@ class KuraudoLocalizations {
     'Google Drive同期型パスワードマネージャー\nZero to Ship プロジェクト':
         'Password manager with Google Drive sync\nZero to Ship project',
     'OS のキーリングが使えません': 'The OS keyring is unavailable',
-    'PIN での解除は使えません。同期先の接続情報は再起動すると消えます。':
-        'PIN unlock is unavailable. Sync connection details are lost when the app restarts.',
+    'PIN での解除は使えません。同期先の接続情報は、マスターパスワードで暗号化してこの端末に保存します。':
+        'PIN unlock is unavailable. Sync connection details are encrypted with your master password and kept on this device.',
     '自動ロックとクリップボードの設定は設定ファイルに保存しています。':
         'Auto-lock and clipboard settings are saved in the settings file.',
     '自動ロックとクリップボードの設定は、変更するときに設定ファイルへ保存するか確認します。':

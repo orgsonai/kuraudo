@@ -192,6 +192,16 @@ wl-copy / xclip / xsel を自動検出してクリア。Wayland/X11 両対応。
 ### WebDAV認証情報の保管 ✅
 サーバーURL、ユーザー名、パスワード、リモートパスを SecureStorage に保存。Android Keystore / Linux Secret Service / Windows Credential Manager 経由。
 
+### キーリングが無い環境の認証情報保管（2026-09-12） ✅
+**ファイル**: `secret_store.dart`
+OS のキーリングが使えない環境（KDE ウォレットを無効にした Linux 等）では、同期の認証情報を Vault と同じ Argon2id + AES-256-GCM で暗号化し、アプリ設定フォルダの `kuraudo_secrets.enc` に保存する。
+- 復号鍵はマスターパスワードから派生（Argon2id は解錠時の 1 回のみ）。Vault 施錠時に鍵と平文をメモリから破棄
+- 解錠していない間は読み書きできない（施錠中の書き込みは無視される）
+- ノンスは保存のたびに新規生成。書き込みは一時ファイル経由で置き換え
+- マスターパスワード変更時は `onMasterPasswordChanged` 経由で再暗号化
+- 端末内に留め、同期・バックアップの対象にしない
+- PIN はこの仕組みの対象外（解錠前に必要なため、引き続きキーリングが必要）
+
 ### WebDAV通信の暗号化（H-03で対応） ✅
 HTTPS を必須化。HTTP は明示的同意が必要に。
 

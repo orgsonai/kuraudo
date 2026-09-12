@@ -11,7 +11,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'secret_store.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -89,7 +89,8 @@ class GoogleDriveService implements SyncBackend {
   static const String _fileScope = 'https://www.googleapis.com/auth/drive.file';
 
   // 暗号化トークンストレージ
-  static const _secureStorage = FlutterSecureStorage();
+  // キーリングが使えない環境では、マスターパスワードで暗号化したファイルに保存される
+  static final _secureStorage = SecretStore.instance;
   static const _tokenKeyPrefix = 'kuraudo_oauth_';
 
   drive.DriveApi? _driveApi;

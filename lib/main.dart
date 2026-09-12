@@ -8,6 +8,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/vault_service.dart';
 import 'services/app_config_store.dart';
+import 'services/secret_store.dart';
 import 'services/google_drive_service.dart';
 import 'services/sync_backend.dart';
 import 'services/local_path_backend.dart';
@@ -164,7 +165,11 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
     // ロック中はパスワード平文がネイティブメモリに残らない
     _vaultService.onLocked = () {
       AutofillService().clearNativeCache();
+      // 同期の認証情報もメモリから捨てる（暗号化ファイル運用時）
+      SecretStore.instance.lock();
     };
+    // マスターパスワード変更時は、秘密保管庫を新しいパスワードで暗号化し直す
+    _vaultService.onMasterPasswordChanged = SecretStore.instance.rekey;
     _loadSettings();
     _startIdleTimer();
   }
@@ -568,11 +573,23 @@ class _KuraudoRootState extends State<KuraudoRoot> with WidgetsBindingObserver {
   void _onUnlocked() {
     _quickLocked = false;
     setState(() {});
-    if (_autoSyncEnabled) _syncManager.autoSync();
+    _restoreSecretsAndSync();
     _lastActiveTime = null;
     _lastInteractionTime = DateTime.now();
     // Android Autofill キャッシュを更新
     _updateAutofillCache();
+  }
+
+  /// 秘密保管庫を開いてから自動同期を始める
+  ///
+  /// キーリングが使えない環境では、解錠して初めて同期の認証情報を復号できる。
+  /// 復号前に同期を始めると未サインイン扱いになるため、順番を守る。
+  Future<void> _restoreSecretsAndSync() async {
+    final masterPassword = _vaultService.masterPassword;
+    if (masterPassword != null) {
+      await SecretStore.instance.unlock(masterPassword);
+    }
+    if (_autoSyncEnabled) _syncManager.autoSync();
   }
 
   void _updateAutofillCache() {

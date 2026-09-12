@@ -140,6 +140,11 @@ class VaultService {
   /// 平文データのメモリ常駐を最小化するための後処理に使用。
   void Function()? onLocked;
 
+  /// マスターパスワード変更時のコールバック
+  ///
+  /// 秘密保管庫（SecretStore）を新しいパスワードで暗号化し直すために使う。
+  void Function(String newPassword)? onMasterPasswordChanged;
+
   /// Vaultを保存
   Future<void> save() async {
     if (_state != VaultState.unlocked || _vault == null || _masterPassword == null) {
@@ -302,6 +307,7 @@ class VaultService {
     // 新しいパスワードで鍵を再派生・キャッシュ
     _deriveAndCacheKey();
     await save();
+    onMasterPasswordChanged?.call(newPassword);
   }
 
   /// 検索

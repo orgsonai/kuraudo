@@ -15,7 +15,7 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'secret_store.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 
 import 'sync_backend.dart';
@@ -34,7 +34,8 @@ class WebDAVHttpNotAllowedException implements Exception {
 
 /// WebDAV同期バックエンド
 class WebDAVBackend implements SyncBackend {
-  static const _secureStorage = FlutterSecureStorage();
+  // キーリングが使えない環境では、マスターパスワードで暗号化したファイルに保存される
+  static final _secureStorage = SecretStore.instance;
   // 接続情報のSecureStorageキー
   static const _kServerUrlKey = 'webdav_server_url';
   static const _kUsernameKey = 'webdav_username';

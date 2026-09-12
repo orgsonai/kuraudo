@@ -14,13 +14,14 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'secret_store.dart';
 
 import 'sync_backend.dart';
 
 /// ローカルパス同期バックエンド
 class LocalPathBackend implements SyncBackend {
-  static const _secureStorage = FlutterSecureStorage();
+  // キーリングが使えない環境では、マスターパスワードで暗号化したファイルに保存される
+  static final _secureStorage = SecretStore.instance;
   static const _kSyncDirKey = 'localpath_sync_dir';
   static const _kLastSyncTimeKey = 'localpath_last_sync_time';
   static const int _maxBackups = 3;

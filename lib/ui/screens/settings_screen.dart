@@ -526,7 +526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Text('OS のキーリングが使えません', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
                     Text(
-                      'PIN での解除は使えません。同期先の接続情報は再起動すると消えます。',
+                      'PIN での解除は使えません。同期先の接続情報は、マスターパスワードで暗号化してこの端末に保存します。',
                       style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.4),
                     ),
                     Text(
