@@ -1,0 +1,125 @@
+# Windows 版を自動でビルドし、GitHub Releases に添付する
+#
+# 使い方:
+#   1. pubspec.yaml の version を上げてコミット
+#   2. 同じ版のタグ（例: v0.4.6）を GitHub に push
+#        git push github main && git push github v0.4.6
+#   3. portable zip とインストーラ（setup.exe）が同じタグのリリースに添付される
+#   公開済みのリリースに後から足すときは、Actions タブ → Run workflow で tag を指定する
+#
+# 事前準備（1 回だけ）: リポジトリの Secrets に GOOGLE_CLIENT_SECRET を登録（Linux 版と共通）
+#
+# Android の APK はここでは作らない。署名鍵を GitHub に置かない方針のため、
+# PC でビルドしてリリースに手で添付する（docs/android-build-guide.md 参照）
+
+name: Windows release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '添付先のタグ（例: v0.4.6）。空ならビルドのみ'
+        required: false
+        default: ''
+
+env:
+  TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+
+jobs:
+  build:
+    name: Flutter ビルド・portable zip・インストーラ
+    # Visual Studio 2022 と Inno Setup 6 が入っている GitHub 提供の Windows 環境
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - name: pubspec.yaml の版とタグの一致を確認
+        if: env.TAG != ''
+        shell: pwsh
+        run: |
+          $line = Select-String -Path 'pubspec.yaml' -Pattern '^version:\s*([^+\s]+)' | Select-Object -First 1
+          $version = $line.Matches[0].Groups[1].Value
+          if ("v$version" -ne $env:TAG) {
+            Write-Output "::error::pubspec.yaml の version ($version) とタグ ($env:TAG) が一致しません"
+            exit 1
+          }
+
+      - name: GOOGLE_CLIENT_SECRET の登録を確認
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if (-not $env:GOOGLE_CLIENT_SECRET) {
+            Write-Output "::error::Secrets に GOOGLE_CLIENT_SECRET がありません。Google Drive 同期が使えない版になるため中止します"
+            exit 1
+          }
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.9 # PC の開発環境と同じ版に合わせる（Linux 版のワークフローと共通）
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter test
+
+      - name: Windows 版をビルド
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: flutter build windows --release "--dart-define=GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET"
+
+      - name: Inno Setup 6 を用意する（ランナーに無いときだけ入れる）
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (Test-Path $iscc) {
+            Write-Output "Inno Setup 6 は既に入っている: $iscc"
+          } else {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: portable zip とインストーラを作る
+        shell: pwsh
+        run: ./packaging/windows/build-packages.ps1 -SkipBuild
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows
+          path: dist/windows/*
+
+  release:
+    name: GitHub Releases に添付
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-windows
+          path: dist
+
+      - name: チェックサムを作る
+        run: |
+          version="${TAG#v}"
+          cd dist
+          sha256sum Kuraudo-*-windows-x64-* > "Kuraudo-${version}-windows-SHA256SUMS.txt"
+          ls -l
+
+      - name: リリースに添付
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "Kuraudo $TAG" \
+              --notes "Windows 版は GitHub Actions で自動ビルドしています。"
+          fi
+          gh release upload "$TAG" dist/* --clobber
